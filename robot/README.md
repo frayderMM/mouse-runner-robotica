@@ -147,6 +147,25 @@ si el LiDAR no está montado cerca del centro del robot, puede hacer
 falta ajustarlo (ver nota equivalente en `CALIBRACION_LIDAR_VISION.md`
 sobre la distancia objetivo de seguimiento de pared).
 
+**Validación del sensado por consenso** (`motion.py::_iniciar_validacion_muros`/
+`_tick_validacion_muros`/`_muros_confirmados`): una sola lectura de
+LiDAR puede fallar por ruido o desalineación — sobre todo porque no hay
+ningún mecanismo de reintento como el que sí tiene la fase B para
+verificar la ruta óptima. Por eso, después de la pausa de celda, el
+robot toma `sensado_muestras` (5) lecturas seguidas de las 4 zonas
+antes de decidir, y una dirección solo se confirma como pared si
+apareció en al menos `sensado_consenso_minimo` (3) de esas 5 muestras
+— una lectura aislada rara no alcanza para contradecir el resto, pero
+una pared real que falló en detectarse una sola vez sigue
+confirmándose (validado con una simulación: ver commit correspondiente).
+Esto agrega un nuevo estado `VALIDANDO_CELDA` entre `PAUSA_CELDA` y
+`DECIDIR`, y ~250 ms por celda (5 muestras a `control_rate_hz`=20Hz).
+
+| Parámetro | Valor |
+|---|---:|
+| `sensado_muestras` | 5 |
+| `sensado_consenso_minimo` | 3 |
+
 No usa seguimiento de pared por LiDAR durante el avance (no hay
 `right_window_deg`/`left_window_deg` de por medio ahí) — la corrección
 en línea recta es puramente por **odometría**, ver siguiente sección.

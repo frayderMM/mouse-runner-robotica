@@ -115,6 +115,15 @@ PARAMETROS_DEFAULT = {
     # Umbral de "hay pared" al sensar una celda: celda_cm/2 (15cm para
     # celdas de 30cm, ver nota en README/FLUJO) + margen de seguridad.
     'umbral_pared_m': 0.20,
+    # Validacion del sensado por consenso (ver motion.py::_tick_validacion_muros):
+    # una sola lectura de LiDAR puede fallar por ruido o desalineacion,
+    # asi que en vez de decidir con una sola muestra, se toman
+    # sensado_muestras lecturas seguidas (con el robot quieto) y una
+    # zona solo se confirma como pared si aparecio en al menos
+    # sensado_consenso_minimo de ellas (mayoria, no una sola lectura
+    # rara que contradiga el resto).
+    'sensado_muestras': 5,
+    'sensado_consenso_minimo': 3,
 
     # --- Avance y giro calibrados (AVANCE_Y_GIRO_CALIBRADO.md) ---
     'factor_dist_odom': 0.9474,
@@ -206,6 +215,8 @@ class Parametros:
         }
         self.max_range_use_m = float(g('max_range_use_m'))
         self.umbral_pared_m = float(g('umbral_pared_m'))
+        self.sensado_muestras = int(g('sensado_muestras'))
+        self.sensado_consenso_minimo = int(g('sensado_consenso_minimo'))
 
         self.factor_dist_odom = float(g('factor_dist_odom'))
         self.factor_ang_odom = float(g('factor_ang_odom'))

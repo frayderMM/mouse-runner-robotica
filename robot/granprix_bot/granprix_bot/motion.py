@@ -51,6 +51,8 @@ class NodoRobotBase(Node):
         self._yaw_inicio_avance = 0.0
         self._yaw_inicio_giro = 0.0
         self._pausa_inicio = None
+        self._muros_conteo = {}
+        self._muros_muestras_tomadas = 0
 
         self._esperando_obstaculo = False
         self._espera_obstaculo_inicio = None
@@ -104,7 +106,10 @@ class NodoRobotBase(Node):
         """Traduce las zonas relativas del LiDAR a un set de direcciones
         absolutas (N/E/S/O) donde hay pared, usando el heading actual
         del robot para rotar frente/derecha/izquierda/atras a
-        norte/este/sur/oeste."""
+        norte/este/sur/oeste. Lectura de UNA sola muestra -- para
+        sensar una celda de verdad usar `_iniciar_validacion_muros` /
+        `_tick_validacion_muros` (varias muestras con consenso, mas
+        resistente al ruido de una lectura suelta)."""
         zonas = self.leer_zonas()
         abs_dirs = lidar.direcciones_absolutas(self.pose.heading)
         muros = set()
@@ -112,6 +117,38 @@ class NodoRobotBase(Node):
             if dist < self.p.umbral_pared_m:
                 muros.add(abs_dirs[zona_rel])
         return muros
+
+    # ------------------------------------------------------------------
+    # Validacion del sensado por consenso: en vez de decidir "hay
+    # pared" con una sola lectura del LiDAR, toma sensado_muestras
+    # lecturas seguidas (con el robot quieto) y una zona solo se
+    # confirma como pared si aparecio en al menos
+    # sensado_consenso_minimo de ellas -- una lectura rara aislada
+    # (ruido, reflejo) no alcanza para contradecir el resto.
+    # ------------------------------------------------------------------
+    def _iniciar_validacion_muros(self):
+        self._muros_conteo = {z: 0 for z in self.p.ventanas_deg}
+        self._muros_muestras_tomadas = 0
+
+    def _tick_validacion_muros(self) -> bool:
+        """Toma una muestra mas y devuelve True cuando ya se tomaron
+        todas las ``sensado_muestras`` pedidas."""
+        zonas = self.leer_zonas()
+        for zona_rel, dist in zonas.items():
+            if dist < self.p.umbral_pared_m:
+                self._muros_conteo[zona_rel] += 1
+        self._muros_muestras_tomadas += 1
+        self._publish_twist(Twist())  # quieto mientras valida
+        return self._muros_muestras_tomadas >= self.p.sensado_muestras
+
+    def _muros_confirmados(self) -> set:
+        """Traduce a direcciones absolutas (N/E/S/O) las zonas que
+        alcanzaron el consenso minimo tras `_tick_validacion_muros`."""
+        abs_dirs = lidar.direcciones_absolutas(self.pose.heading)
+        return {
+            abs_dirs[zona_rel] for zona_rel, cuenta in self._muros_conteo.items()
+            if cuenta >= self.p.sensado_consenso_minimo
+        }
 
     # ------------------------------------------------------------------
     # Seguridad: obstaculo al frente (activa en cualquier estado)

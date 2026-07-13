@@ -6,7 +6,10 @@ completo) por sensado REAL con el LiDAR en cada celda.
 
 Secuencia por celda (pedida explicitamente): llegar -> detenerse 1s
 (``tiempo_pausa_antes_girar_s`` reusado como pausa de celda, ver YAML) ->
-sensar con el LiDAR y registrar los muros nuevos -> decidir el
+validar el sensado tomando ``sensado_muestras`` lecturas de LiDAR
+seguidas (una sola lectura puede fallar por ruido; una zona solo se
+confirma como pared si aparece en al menos ``sensado_consenso_minimo``
+de esas muestras) -> registrar los muros nuevos -> decidir el
 siguiente movimiento con flood fill -> girar si hace falta -> avanzar
 30cm a la siguiente celda -> repetir.
 
@@ -59,12 +62,12 @@ class ExplorerNode(NodoRobotBase):
         )
 
     # ------------------------------------------------------------------
-    # Sensado (equivalente real de Explorer._sense_celda del simulador)
+    # Sensado (equivalente real de Explorer._sense_celda del simulador,
+    # con el muro ya confirmado por consenso de varias muestras -- ver
+    # motion.py::_iniciar_validacion_muros/_tick_validacion_muros)
     # ------------------------------------------------------------------
-    def _sensar_celda_actual(self):
+    def _procesar_sensado(self, muros_detectados: set):
         pos = self.pose.cell
-        zonas = self.leer_zonas()
-        muros_detectados = self.leer_muros_celda_actual()
         nuevos = []
         for direccion, vecino in ((d, (pos[0] + dx, pos[1] + dy))
                                    for d, (dx, dy) in
@@ -75,11 +78,11 @@ class ExplorerNode(NodoRobotBase):
                     self.conocidos.add(w)
                     nuevos.append(direccion)
         self.sensadas.add(pos)
+        conteo_txt = ','.join(f'{z}={c}/{self.p.sensado_muestras}' for z, c in self._muros_conteo.items())
         self._log_evento(
             'SENSADO',
             muros_nuevos=','.join(nuevos) or 'ninguno',
-            zona_front=f'{zonas["front"]:.2f}', zona_right=f'{zonas["right"]:.2f}',
-            zona_left=f'{zonas["left"]:.2f}', zona_back=f'{zonas["back"]:.2f}',
+            conteo_zonas=conteo_txt,
             sensadas=f'{len(self.sensadas)}/{self.mz.cols * self.mz.rows}',
         )
         return nuevos
@@ -133,12 +136,17 @@ class ExplorerNode(NodoRobotBase):
 
     def _handle_pausa_celda(self):
         if self._tick_pausa(self.p.tiempo_pausa_antes_girar_s):
-            # Sensar DESPUES de la pausa (no antes): la pausa existe
+            # Validar DESPUES de la pausa (no antes): la pausa existe
             # para dejar que el chasis se asiente (vibracion/inercia de
             # frenado) antes de confiar en la lectura del LiDAR -- si
             # se sensa apenas se detecta la llegada, esa lectura puede
             # tomarse con el robot todavia en movimiento residual.
-            self._sensar_celda_actual()
+            self._iniciar_validacion_muros()
+            self._set_state('VALIDANDO_CELDA')
+
+    def _handle_validando_celda(self):
+        if self._tick_validacion_muros():
+            self._procesar_sensado(self._muros_confirmados())
             self._set_state('DECIDIR')
 
     def _handle_decidir(self):
