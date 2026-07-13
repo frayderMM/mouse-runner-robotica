@@ -16,6 +16,18 @@ explorer:
     scan_topic: /scan
     odom_topic: /odom_raw
     cmd_vel_topic: /cmd_vel
+    # Buzzer del robot -- confirmado en el proyecto original con
+    # `ros2 topic info /beep -v` (lo suscribe el driver YB_Car_Node).
+    buzzer_topic: /beep
+    # Pitido suave al decidir un giro (ver motion.py::_emitir_pitido),
+    # publicado justo antes de PAUSA_GIRO -- avisa que el proximo
+    # movimiento es un giro, no un avance recto.
+    pitido_giro_ms: 120
+    # Telemetria (ver motion.py::_log_evento / _set_state, y
+    # README.md seccion 4.1): topico de eventos de decision y de
+    # estado actual, para ver en vivo con `ros2 topic echo`.
+    event_topic: /robot_event
+    robot_state_topic: /robot_state
     control_rate_hz: 20.0
 
     # --- Pista (pistas/pista_ejemplo.txt) ---
@@ -85,6 +97,10 @@ speedrun:
     scan_topic: /scan
     odom_topic: /odom_raw
     cmd_vel_topic: /cmd_vel
+    buzzer_topic: /beep
+    pitido_giro_ms: 120
+    event_topic: /robot_event
+    robot_state_topic: /robot_state
     control_rate_hz: 20.0
 
     celda_cm: 30.0

@@ -53,9 +53,9 @@ class ExplorerNode(NodoRobotBase):
         self._terminado = False
 
         self._state = 'INICIAR'
-        self.get_logger().info(
-            f'explorer listo: inicio={nombre(self.mz.start)} meta={nombre(self.mz.goal)} '
-            f'pista {self.mz.cols}x{self.mz.rows} celdas de {self.p.celda_cm:.0f}cm'
+        self._log_evento(
+            'INICIO', meta=nombre(self.mz.goal),
+            pista=f'{self.mz.cols}x{self.mz.rows}', celda_cm=self.p.celda_cm,
         )
 
     # ------------------------------------------------------------------
@@ -63,6 +63,7 @@ class ExplorerNode(NodoRobotBase):
     # ------------------------------------------------------------------
     def _sensar_celda_actual(self):
         pos = self.pose.cell
+        zonas = self.leer_zonas()
         muros_detectados = self.leer_muros_celda_actual()
         nuevos = []
         for direccion, vecino in ((d, (pos[0] + dx, pos[1] + dy))
@@ -74,9 +75,12 @@ class ExplorerNode(NodoRobotBase):
                     self.conocidos.add(w)
                     nuevos.append(direccion)
         self.sensadas.add(pos)
-        self.get_logger().info(
-            f'sensada {nombre(pos)}: muros nuevos = {nuevos or "ninguno"} '
-            f'({len(self.sensadas)}/{self.mz.cols * self.mz.rows} celdas)'
+        self._log_evento(
+            'SENSADO',
+            muros_nuevos=','.join(nuevos) or 'ninguno',
+            zona_front=f'{zonas["front"]:.2f}', zona_right=f'{zonas["right"]:.2f}',
+            zona_left=f'{zonas["left"]:.2f}', zona_back=f'{zonas["back"]:.2f}',
+            sensadas=f'{len(self.sensadas)}/{self.mz.cols * self.mz.rows}',
         )
         return nuevos
 
@@ -84,22 +88,24 @@ class ExplorerNode(NodoRobotBase):
     # Decision (identica a Explorer.paso del simulador)
     # ------------------------------------------------------------------
     def _paso(self, pos, targets):
-        """Devuelve (d_elegida, siguiente) o (None, None) si no hay
-        ninguna direccion sin pared conocida -- en el simulador esto
-        nunca pasa (el mapa viene garantizado resoluble por datos
-        ground-truth), pero con sensado LiDAR real, ruido/desalineacion
-        puede marcar las 4 direcciones de una celda como pared. El
-        llamador (_handle_decidir) debe manejar el caso None."""
+        """Devuelve (d_elegida, siguiente, opciones) o (None, None, [])
+        si no hay ninguna direccion sin pared conocida -- en el
+        simulador esto nunca pasa (el mapa viene garantizado resoluble
+        por datos ground-truth), pero con sensado LiDAR real,
+        ruido/desalineacion puede marcar las 4 direcciones de una celda
+        como pared. El llamador (_handle_decidir) debe manejar el caso
+        None. ``opciones`` se devuelve tambien para poder loguear
+        exactamente que evaluo y por que eligio lo que eligio."""
         dist = self.mz.flood(targets, self.conocidos)
         opciones = []
         for n, d in self.mz.vecinos(pos):
             if wall(pos, n) not in self.conocidos:
                 opciones.append((dist.get(n, INF), self.p.orden_desempate.index(d), d, n))
         if not opciones:
-            return None, None
+            return None, None, []
         opciones.sort()
         _, _, d_elegida, siguiente = opciones[0]
-        return d_elegida, siguiente
+        return d_elegida, siguiente, opciones
 
     # ------------------------------------------------------------------
     # Ciclo de control
@@ -139,7 +145,7 @@ class ExplorerNode(NodoRobotBase):
         pos = self.pose.cell
 
         if self.fase == 'A' and pos == self.mz.goal:
-            self.get_logger().info('FASE A completa: llego a la meta. Empieza FASE B (verificacion).')
+            self._log_evento('FASE_B_INICIO', motivo='llego a la meta, verificando ruta optima')
             self.fase = 'B'
 
         if self.fase == 'A':
@@ -163,11 +169,11 @@ class ExplorerNode(NodoRobotBase):
 
         self.num_celdas += 1
         if self.num_celdas > self.p.max_celdas_recorridas:
-            self.get_logger().error('limite de celdas recorridas alcanzado sin terminar -- deteniendo')
+            self._log_evento('LIMITE_CELDAS', num_celdas=self.num_celdas)
             self._terminar()
             return
 
-        d_elegida, siguiente = self._paso(pos, targets)
+        d_elegida, siguiente, opciones = self._paso(pos, targets)
         if d_elegida is None:
             # Las 4 direcciones de la celda actual quedaron marcadas
             # como pared (sensado ruidoso) -- no hay opcion segura.
@@ -175,12 +181,20 @@ class ExplorerNode(NodoRobotBase):
             return
         self._direccion_elegida = d_elegida
 
+        opciones_txt = ','.join(f'{d}->{nombre(n)}:{dv if dv < INF else "inf"}'
+                                 for dv, _, d, n in opciones)
+        self._log_evento(
+            'DECISION', fase=self.fase, opciones=opciones_txt,
+            elegida=d_elegida, hacia=nombre(siguiente),
+        )
+
         lado = lado_para_girar(self.pose.heading, d_elegida)
         if lado == 'NINGUNO':
             self._iniciar_avance()
             self._set_state('AVANZAR')
         else:
             self._lado_giro_pendiente = lado
+            self._emitir_pitido()
             self._iniciar_pausa()
             self._set_state('PAUSA_GIRO')
 
@@ -191,13 +205,16 @@ class ExplorerNode(NodoRobotBase):
 
     def _handle_girar(self):
         if self._tick_giro(self._lado_giro_pendiente):
-            self.pose.girar(self._lado_giro_pendiente)
+            lado = self._lado_giro_pendiente
+            self.pose.girar(lado)
+            self._log_evento('GIRO_FIN', lado=lado)
             self._iniciar_avance()
             self._set_state('AVANZAR')
 
     def _handle_avanzar(self):
         if self._tick_avance():
             self.pose.avanzar()
+            self._log_evento('AVANCE_FIN', celda=self.pose.cell_name)
             self._iniciar_pausa()
             self._set_state('PAUSA_CELDA')
             # El sensado ocurre en _handle_pausa_celda, DESPUES de la
@@ -208,10 +225,10 @@ class ExplorerNode(NodoRobotBase):
         self._terminado = True
         self._set_state('TERMINADO')
         self._guardar_mapa()
-        self.get_logger().info(
-            f'EXPLORACION TERMINADA: {self.num_celdas} movimientos, '
-            f'{len(self.sensadas)}/{self.mz.cols * self.mz.rows} celdas sensadas, '
-            f'mapa guardado en {self.p.mapa_salida}'
+        self._log_evento(
+            'EXPLORACION_TERMINADA', num_celdas=self.num_celdas,
+            sensadas=f'{len(self.sensadas)}/{self.mz.cols * self.mz.rows}',
+            mapa=self.p.mapa_salida,
         )
 
     def _fallar(self, motivo: str):
@@ -223,8 +240,8 @@ class ExplorerNode(NodoRobotBase):
         self._publish_twist_vacio()
         self._terminado = True
         self._set_state('TERMINADO')
-        self.get_logger().error(f'EXPLORACION ABORTADA: {motivo}')
         self._guardar_mapa()
+        self._log_evento('EXPLORACION_ABORTADA', motivo=motivo)
 
     def _guardar_mapa(self):
         """Mismo formato 4-bits (bit0=N bit1=E bit2=S bit3=O) que
@@ -251,10 +268,6 @@ class ExplorerNode(NodoRobotBase):
 
     def _publish_twist_vacio(self):
         self._publish_twist(Twist())
-
-    def _set_state(self, nuevo_estado: str):
-        self._state = nuevo_estado
-        self.get_logger().debug(f'-> {nuevo_estado}')
 
 
 def main(args=None):

@@ -57,6 +57,34 @@ def calcular_zonas(scan, front_offset_deg: float, invert_left_right: bool,
     return zonas
 
 
+def puntos_robot(scan, front_offset_deg: float, invert_left_right: bool,
+                  rango_max_m: float, max_puntos: int = 360) -> list:
+    """Devuelve una lista de ``[x, y]`` (metros, marco del robot: x=frente,
+    y=izquierda) para dibujar el barrido crudo del LiDAR -- usado solo
+    por ``web_dashboard_node`` (radar en vivo), mismo offset/inversion
+    que ``calcular_zonas`` para que lo dibujado coincida con las zonas
+    que usan explorer/speedrun. Decimado a ``max_puntos`` como mucho."""
+    if scan is None or not scan.ranges:
+        return []
+
+    n = len(scan.ranges)
+    paso = max(1, n // max_puntos)
+    offset_rad = math.radians(front_offset_deg)
+    rango_max = min(scan.range_max, rango_max_m)
+
+    puntos = []
+    for i in range(0, n, paso):
+        r = scan.ranges[i]
+        if not math.isfinite(r) or r <= scan.range_min or r > rango_max:
+            continue
+        raw_angle = scan.angle_min + i * scan.angle_increment
+        angulo = normalize_angle(raw_angle - offset_rad)
+        if invert_left_right:
+            angulo = -angulo
+        puntos.append([round(r * math.cos(angulo), 3), round(r * math.sin(angulo), 3)])
+    return puntos
+
+
 # Zonas relativas -> direccion absoluta segun heading actual del robot
 # (N/E/S/O). "front" pasa a ser la direccion del heading; "right" es
 # heading girado -90 (derecha); "left" +90; "back" +180. Reusa las

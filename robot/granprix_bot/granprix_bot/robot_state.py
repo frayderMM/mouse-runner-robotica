@@ -80,6 +80,18 @@ PARAMETROS_DEFAULT = {
     'scan_topic': '/scan',
     'odom_topic': '/odom_raw',
     'cmd_vel_topic': '/cmd_vel',
+    # Buzzer: std_msgs/UInt16 con la duracion en ms -- confirmado en
+    # pista en el proyecto original (`ros2 topic info /beep -v`, lo
+    # suscribe el driver base YB_Car_Node).
+    'buzzer_topic': '/beep',
+    # Pitido suave y corto al decidir un giro (ver
+    # motion.py::_emitir_pitido) -- mas corto que un pitido de alerta.
+    'pitido_giro_ms': 120,
+    # Telemetria (ver motion.py::_log_evento / _set_state): topico de
+    # eventos de decision (String, formato "tipo|celda|heading|detalle")
+    # y topico de estado actual de la maquina de estados (String).
+    'event_topic': '/robot_event',
+    'robot_state_topic': '/robot_state',
     'control_rate_hz': 20.0,
 
     # --- Pista (pistas/pista_ejemplo.txt) ---
@@ -169,6 +181,10 @@ class Parametros:
         self.scan_topic = g('scan_topic')
         self.odom_topic = g('odom_topic')
         self.cmd_vel_topic = g('cmd_vel_topic')
+        self.buzzer_topic = g('buzzer_topic')
+        self.pitido_giro_ms = int(g('pitido_giro_ms'))
+        self.event_topic = g('event_topic')
+        self.robot_state_topic = g('robot_state_topic')
         self.control_rate_hz = float(g('control_rate_hz'))
 
         self.celda_cm = float(g('celda_cm'))

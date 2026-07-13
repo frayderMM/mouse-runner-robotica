@@ -48,15 +48,11 @@ class SpeedrunNode(NodoRobotBase):
         self._terminado = False
         self._state = 'INICIAR'
 
-        self.get_logger().info(
-            f'speedrun listo: ruta de {len(ruta) - 1} movimientos en {len(self.segmentos)} tramos '
-            f'({nombre(self.mz.start)} -> {nombre(self.mz.goal)})'
+        plan_txt = ','.join(f'{s["dir"]}x{s["celdas"]}' for s in self.segmentos)
+        self._log_evento(
+            'INICIO', meta=nombre(self.mz.goal), movimientos=len(ruta) - 1,
+            tramos=len(self.segmentos), plan=plan_txt,
         )
-        for i, s in enumerate(self.segmentos):
-            self.get_logger().info(
-                f'  tramo {i + 1}: {s["celdas"]} celdas hacia {s["dir"]} '
-                f'({s["celdas"] * self.p.celda_cm:.0f} cm)'
-            )
 
     # ------------------------------------------------------------------
     # Carga de mapa (formato 4-bits: bit0=N bit1=E bit2=S bit3=O)
@@ -127,7 +123,7 @@ class SpeedrunNode(NodoRobotBase):
             self._publish_twist(Twist())
             self._terminado = True
             self._set_state('META')
-            self.get_logger().error('SPEEDRUN ABORTADO: obstaculo al frente persistente')
+            self._log_evento('SPEEDRUN_ABORTADO', motivo='obstaculo al frente persistente')
             return
         if self._handle_obstaculo_frente():
             return
@@ -147,11 +143,16 @@ class SpeedrunNode(NodoRobotBase):
 
         seg = self.segmentos[self._seg_idx]
         lado = lado_para_girar(self.pose.heading, seg['dir'])
+        self._log_evento(
+            'DECISION_SEGMENTO', tramo=f'{self._seg_idx + 1}/{len(self.segmentos)}',
+            dir=seg['dir'], celdas=seg['celdas'], giro=lado,
+        )
         if lado == 'NINGUNO':
             self._iniciar_avance()
             self._set_state('AVANZAR')
         else:
             self._lado_giro_pendiente = lado
+            self._emitir_pitido()
             self._iniciar_pausa()
             self._set_state('PAUSA_GIRO')
 
@@ -162,7 +163,9 @@ class SpeedrunNode(NodoRobotBase):
 
     def _handle_girar(self):
         if self._tick_giro(self._lado_giro_pendiente):
-            self.pose.girar(self._lado_giro_pendiente)
+            lado = self._lado_giro_pendiente
+            self.pose.girar(lado)
+            self._log_evento('GIRO_FIN', lado=lado)
             self._iniciar_avance()
             self._set_state('AVANZAR')
 
@@ -172,7 +175,10 @@ class SpeedrunNode(NodoRobotBase):
         if self._tick_avance(distancia_m):
             for _ in range(seg['celdas']):
                 self.pose.avanzar()
-            self.get_logger().info(f'tramo {self._seg_idx + 1}/{len(self.segmentos)} completo, en {self.pose.cell_name}')
+            self._log_evento(
+                'TRAMO_FIN', tramo=f'{self._seg_idx + 1}/{len(self.segmentos)}',
+                celda=self.pose.cell_name,
+            )
             self._seg_idx += 1
             self._set_state('DECIDIR_SEGMENTO')
 
@@ -181,14 +187,10 @@ class SpeedrunNode(NodoRobotBase):
         self._terminado = True
         self._set_state('META')
         llego = self.pose.cell == self.mz.goal
-        self.get_logger().info(
-            f'SPEEDRUN TERMINADO en {self.pose.cell_name} '
-            f'({"META alcanzada" if llego else "OJO: no coincide con la meta esperada"})'
+        self._log_evento(
+            'SPEEDRUN_TERMINADO',
+            resultado='META alcanzada' if llego else 'OJO: no coincide con la meta esperada',
         )
-
-    def _set_state(self, nuevo_estado: str):
-        self._state = nuevo_estado
-        self.get_logger().debug(f'-> {nuevo_estado}')
 
 
 def main(args=None):

@@ -13,7 +13,10 @@ un arco (avance lineal lento + velocidad angular maxima), no una
 rotacion en el sitio -- igual que ``state_machine_node.py`` original.
 """
 
+import csv
+import datetime
 import math
+import os
 
 import rclpy
 from rclpy.node import Node
@@ -21,6 +24,7 @@ from rclpy.qos import QoSPresetProfiles
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String, UInt16
 
 from . import lidar
 from .geometry_utils import angle_diff, yaw_from_quaternion
@@ -54,6 +58,10 @@ class NodoRobotBase(Node):
         self.obstaculo_abandonado = False
 
         self._cmd_pub = self.create_publisher(Twist, self.p.cmd_vel_topic, 10)
+        self._buzzer_pub = self.create_publisher(UInt16, self.p.buzzer_topic, 10)
+        self._event_pub = self.create_publisher(String, self.p.event_topic, 10)
+        self._robot_state_pub = self.create_publisher(String, self.p.robot_state_topic, 10)
+        self._csv_path = self._preparar_csv(nombre_nodo)
 
         self.create_subscription(Odometry, self.p.odom_topic, self._on_odom, 10)
         self.create_subscription(
@@ -281,6 +289,69 @@ class NodoRobotBase(Node):
     # ------------------------------------------------------------------
     def _publish_twist(self, cmd: Twist):
         self._cmd_pub.publish(cmd)
+
+    def _emitir_pitido(self, duracion_ms: int = None):
+        """Publica en /beep (std_msgs/UInt16, duracion en ms) -- mismo
+        topico/tipo que usaba el proyecto original para el buzzer del
+        robot (confirmado en pista con ``ros2 topic info /beep -v``,
+        lo suscribe el driver base ``YB_Car_Node``). Default:
+        ``pitido_giro_ms`` (pitido suave, mas corto que el de META)."""
+        if duracion_ms is None:
+            duracion_ms = self.p.pitido_giro_ms
+        self._buzzer_pub.publish(UInt16(data=int(duracion_ms)))
+
+    # ------------------------------------------------------------------
+    # Telemetria: feedback en vivo (topicos) + registro en CSV (post-analisis)
+    # ------------------------------------------------------------------
+    def _preparar_csv(self, nombre_nodo: str) -> str:
+        """Un archivo nuevo por corrida (con fecha/hora en el nombre,
+        no se pisa entre corridas) en ``~/capytown_resultados/`` --
+        misma carpeta que ya usaba el proyecto original para
+        resultados. Devuelve la ruta ya con el encabezado escrito."""
+        carpeta = os.path.expanduser('~/capytown_resultados')
+        os.makedirs(carpeta, exist_ok=True)
+        marca = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        ruta = os.path.join(carpeta, f'eventos_{nombre_nodo}_{marca}.csv')
+        with open(ruta, 'w', encoding='utf-8', newline='') as f:
+            csv.writer(f).writerow([
+                't_s', 'nodo', 'evento', 'estado', 'celda', 'heading',
+                'odom_x_m', 'odom_y_m', 'yaw_deg', 'detalle',
+            ])
+        self.get_logger().info(f'log de eventos: {ruta}')
+        return ruta
+
+    def _log_evento(self, tipo: str, **detalle):
+        """Registra un evento de decision/transicion en 3 lugares a la
+        vez, para poder corregir/ajustar despues:
+        1. Log de consola (``ros2 launch`` / ``ros2 run`` lo muestra en vivo).
+        2. Topico ``/robot_event`` (String) -- ``ros2 topic echo
+           /robot_event`` para verlo en vivo sin mirar la consola.
+        3. Fila en el CSV de esta corrida -- para graficar/analizar
+           despues (Excel, pandas, lo que sea).
+
+        ``detalle`` son pares clave=valor libres segun el evento (ej.
+        ``_log_evento('DECISION', fase='A', elegida='N', hacia='A2')``)."""
+        t = self.get_clock().now().nanoseconds / 1e9
+        detalle_txt = ';'.join(f'{k}={v}' for k, v in detalle.items())
+
+        self.get_logger().info(f'[{tipo}] {self.pose.cell_name} ({self.pose.heading}) {detalle_txt}')
+        self._event_pub.publish(String(data=f'{tipo}|{self.pose.cell_name}|{self.pose.heading}|{detalle_txt}'))
+
+        with open(self._csv_path, 'a', encoding='utf-8', newline='') as f:
+            csv.writer(f).writerow([
+                f'{t:.3f}', self.get_name(), tipo, self._state,
+                self.pose.cell_name, self.pose.heading,
+                f'{self._odom_x:.3f}', f'{self._odom_y:.3f}',
+                f'{math.degrees(self._yaw):.1f}', detalle_txt,
+            ])
+
+    def _set_state(self, nuevo_estado: str):
+        """Compartido por explorer_node y speedrun_node -- ademas de
+        guardar el estado, lo publica en ``/robot_state`` (String) para
+        poder ver en vivo en que estado esta el robot sin mirar logs."""
+        self._state = nuevo_estado
+        self._robot_state_pub.publish(String(data=nuevo_estado))
+        self.get_logger().debug(f'-> {nuevo_estado}')
 
     def _on_timer(self):
         raise NotImplementedError

@@ -202,6 +202,20 @@ falta verificar en el robot real** (sección 5, orden de calibración):
 | `tiempo_espera_obstaculo_s` | 2.0 |
 | `max_intentos_obstaculo` | 5 (si el obstáculo sigue bloqueando tras 5 esperas de 2s = 10s, aborta la misión en vez de esperar para siempre en silencio) |
 
+### Pitido al decidir un giro (`motion.py::_emitir_pitido`)
+
+En `_handle_decidir`/`_handle_decidir_segmento`, justo en el momento
+en que se decide que el próximo movimiento es un giro (antes de
+`PAUSA_GIRO`), ambos nodos publican un pitido suave y corto en
+`/beep` (`std_msgs/UInt16`, duración en ms) — mismo tópico/tipo que
+usaba el proyecto original para el buzzer del robot. Si el siguiente
+movimiento es un avance recto, no suena nada.
+
+| Parámetro | Valor |
+|---|---:|
+| `buzzer_topic` | `/beep` |
+| `pitido_giro_ms` | 120 (pitido corto y suave — subir el valor para un pitido más largo/audible) |
+
 ---
 
 ## 3.1 Correcciones tras revisión de código (2026-07)
@@ -271,8 +285,80 @@ ros2 launch granprix_bot speedrun.launch.py
 ```bash
 ros2 topic echo /cmd_vel
 ros2 topic echo /odom_raw
+ros2 topic echo /robot_event    # cada decision, en vivo (ver seccion 6)
+ros2 topic echo /robot_state    # estado actual de la maquina de estados
 cat ~/capytown_resultados/mapa_descubierto.yaml   # despues de la Ronda 1
 ```
+
+---
+
+## 4.1 Feedback y registro de decisiones (para ajustar calibración)
+
+Cada decisión relevante del robot (qué sensó, qué evaluó, qué eligió,
+cuándo giró, cuándo terminó un tramo, cuándo abortó) se publica y se
+guarda en 3 lugares a la vez — implementado en
+`motion.py::_log_evento` / `_set_state`:
+
+1. **Log de consola** — lo que ya se ve con `ros2 launch`/`ros2 run`.
+2. **Tópico `/robot_event`** (`std_msgs/String`, formato
+   `tipo|celda|heading|detalle`) — para verlo en vivo sin mirar la
+   consola: `ros2 topic echo /robot_event`.
+3. **CSV, uno por corrida** en
+   `~/capytown_resultados/eventos_<nodo>_<fecha_hora>.csv` (no se pisa
+   entre corridas) — para abrir en Excel/pandas después y ajustar
+   calibración con datos reales, no solo con lo que se alcanzó a leer
+   en la consola en el momento.
+
+### Columnas del CSV
+
+| Columna | Qué es |
+|---|---|
+| `t_s` | Tiempo (reloj de ROS) del evento, en segundos |
+| `nodo` | `explorer` o `speedrun` |
+| `evento` | Tipo de evento (tabla de abajo) |
+| `estado` | Estado de la máquina de estados en ese momento |
+| `celda` | Celda actual (`A1`, `C3`, etc.) |
+| `heading` | Orientación actual (`N`/`E`/`S`/`O`) |
+| `odom_x_m` / `odom_y_m` | Posición de odometría (ya corregida por `factor_dist_odom`) |
+| `yaw_deg` | Yaw de odometría en grados (ya corregido por `factor_ang_odom`) |
+| `detalle` | Pares `clave=valor` separados por `;`, específicos de cada evento |
+
+### Eventos que se registran
+
+| Evento | Nodo | Cuándo | `detalle` incluye |
+|---|---|---|---|
+| `INICIO` | ambos | al arrancar el nodo | meta, tamaño de pista (`explorer`) / plan completo de tramos (`speedrun`) |
+| `SENSADO` | explorer | después de cada pausa de celda | muros nuevos, las 4 distancias de LiDAR leídas, celdas sensadas hasta ahora |
+| `FASE_B_INICIO` | explorer | al llegar a la meta en fase A | motivo |
+| `DECISION` | explorer | en cada celda, antes de moverse | **todas** las opciones evaluadas por flood fill (dirección→celda:distancia) y cuál eligió — el mismo detalle que mostraba `--detalle` en el simulador |
+| `DECISION_SEGMENTO` | speedrun | antes de cada tramo | qué tramo, dirección, cantidad de celdas, si hace falta girar |
+| `GIRO_FIN` | ambos | al completar un giro | lado (DERECHA/IZQUIERDA/ATRAS) |
+| `AVANCE_FIN` | explorer | al completar el avance de una celda | celda a la que llegó |
+| `TRAMO_FIN` | speedrun | al completar un tramo comprimido | qué tramo, celda a la que llegó |
+| `LIMITE_CELDAS` | explorer | si se alcanza `max_celdas_recorridas` | cantidad de celdas recorridas |
+| `EXPLORACION_TERMINADA` | explorer | fin normal (mapa completo y verificado) | movimientos, celdas sensadas, ruta del mapa guardado |
+| `EXPLORACION_ABORTADA` | explorer | aborto controlado (ver hallazgos 1-2 de la sección 3.1) | motivo |
+| `SPEEDRUN_TERMINADO` | speedrun | fin normal | si llegó a la meta esperada |
+| `SPEEDRUN_ABORTADO` | speedrun | obstáculo persistente | motivo |
+
+### Cómo usarlo para ajustar calibración
+
+- **¿El robot decidió mal en una celda?** Buscar la fila `DECISION` de
+  esa celda en el CSV — el campo `opciones` muestra exactamente qué
+  distancias flood-fill vio para cada dirección disponible, igual que
+  el log `--detalle` del simulador offline. Si `opciones` no coincide
+  con lo que la pista real tiene en esa celda, el problema está en el
+  sensado (`SENSADO` de esa misma celda, revisar las 4 distancias
+  contra `umbral_pared_m`), no en la decisión en sí.
+- **¿El robot se desvió en un tramo largo?** Comparar `odom_x_m`/
+  `odom_y_m`/`yaw_deg` entre el `AVANCE_FIN`/`TRAMO_FIN` de inicio y
+  fin de ese tramo contra la distancia/ángulo esperados — ver si
+  `tipo_correccion=angular_simple` está corrigiendo lo suficiente
+  (sección 3, "Corrección en línea recta").
+- **¿Un giro quedó torcido?** Comparar el `yaw_deg` del evento
+  `GIRO_FIN` contra el heading lógico que debería tener — un giro de
+  90° real debería mover el yaw ~90° (con el fix de la sección 3.1,
+  ya no ~86°).
 
 ---
 
