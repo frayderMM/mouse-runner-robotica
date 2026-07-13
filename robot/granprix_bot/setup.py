@@ -17,6 +17,10 @@ setup(
             glob(os.path.join('launch', '*.launch.py'))),
         (os.path.join('share', package_name, 'config'),
             glob(os.path.join('config', '*.yaml'))),
+        (os.path.join('share', package_name, 'config'),
+            glob(os.path.join('config', '*.json'))),
+        (os.path.join('share', package_name, 'web'),
+            glob(os.path.join('web', '*.html'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -33,6 +37,7 @@ setup(
         'console_scripts': [
             'explorer_node = granprix_bot.explorer_node:main',
             'speedrun_node = granprix_bot.speedrun_node:main',
+            'web_dashboard_node = granprix_bot.web_dashboard_node:main',
         ],
     },
 )

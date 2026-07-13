@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>granprix_bot — Dashboard</title>
+<style>
+  :root {
+    --bg: #111318; --panel: #191d24; --line: #333b49; --muted: #9aa6b2;
+    --text: #edf2f7; --cyan: #26c6da; --green: #45c46a; --red: #ef5350;
+    --yellow: #ffd54f; --orange: #ff9f43; --blue: #4f83ff; --purple: #b388ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+
+  header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 8px 12px; background: #151922; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; white-space: nowrap; }
+  header .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+  header .dot.ok { background: var(--green); }
+  header .dot.bad { background: var(--red); }
+  header input, header button { height: 30px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 13px; padding: 0 8px; }
+  header button { cursor: pointer; }
+  header button:hover { border-color: var(--cyan); }
+  #status { color: var(--muted); font-size: 13px; }
+
+  .metrics { display: flex; flex-wrap: wrap; gap: 14px; padding: 6px 12px;
+    background: #14171e; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .metrics .m span { color: var(--muted); margin-right: 5px; }
+  .metrics .m strong { color: var(--text); }
+
+  .grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr; gap: 8px; padding: 8px; min-height: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panel h2 { font-size: 12.5px; margin: 0; padding: 7px 10px; color: var(--muted);
+    border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .04em; }
+  .panel .body { flex: 1; min-height: 0; position: relative; }
+  canvas { width: 100%; height: 100%; display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  thead th { position: sticky; top: 0; background: var(--panel); color: var(--muted);
+    text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  tbody td { padding: 3px 8px; border-bottom: 1px solid #242a35; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  tbody tr:hover { background: #1f2530; }
+  .tabla-scroll { overflow: auto; height: 100%; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10.5px;
+    font-weight: 600; }
+  .tag.DECISION, .tag.DECISION_SEGMENTO { background: #26344a; color: var(--cyan); }
+  .tag.SENSADO { background: #2a3a2e; color: var(--green); }
+  .tag.GIRO_FIN { background: #3a2e1a; color: var(--orange); }
+  .tag.AVANCE_FIN, .tag.TRAMO_FIN { background: #2a2a3a; color: var(--purple); }
+  .tag.FASE_B_INICIO, .tag.INICIO { background: #1a2a3a; color: var(--blue); }
+  .tag.EXPLORACION_ABORTADA, .tag.SPEEDRUN_ABORTADO, .tag.LIMITE_CELDAS { background: #3a1a1a; color: var(--red); }
+  .tag.EXPLORACION_TERMINADA, .tag.SPEEDRUN_TERMINADO { background: #1a3a24; color: var(--green); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>granprix_bot</h1>
+  <span class="dot" id="dot"></span>
+  <span id="status">Sin conectar</span>
+  <input id="endpoint" size="26" placeholder="http://10.42.0.1:8080/data">
+  <button id="btnConectar">Conectar</button>
+  <select id="rate">
+    <option value="300">3 Hz</option>
+    <option value="500" selected>2 Hz</option>
+    <option value="1000">1 Hz</option>
+  </select>
+</header>
+
+<section class="metrics">
+  <span class="m"><span>Estado</span><strong id="mEstado">--</strong></span>
+  <span class="m"><span>Celda</span><strong id="mCelda">--</strong></span>
+  <span class="m"><span>Heading</span><strong id="mHeading">--</strong></span>
+  <span class="m"><span>Frente/Der/Izq/Atrás</span><strong id="mZonas">-- / -- / -- / --</strong></span>
+  <span class="m"><span>v / w</span><strong id="mCmd">0.00 / 0.00</strong></span>
+  <span class="m"><span>Última decisión</span><strong id="mDecision">--</strong></span>
+</section>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Mapa — recorrido</h2>
+    <div class="body"><canvas id="cMapa"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>LiDAR</h2>
+    <div class="body"><canvas id="cLidar"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>Decisiones</h2>
+    <div class="body">
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>t (s)</th><th>evento</th><th>celda</th><th>heading</th><th>detalle</th></tr></thead>
+          <tbody id="tblDecisiones"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Odometría</h2>
+    <div class="body"><canvas id="cOdom"></canvas></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const endpointInput = $("endpoint");
+const dot = $("dot");
+const statusEl = $("status");
+
+let endpoint = localStorage.getItem("granprix.endpoint") || "http://10.42.0.1:8080/data";
+endpointInput.value = endpoint;
+let data = null;
+let timer = null;
+let t0 = null;   // primer timestamp recibido, para mostrar "t (s)" relativo en la tabla
+
+function normalizeEndpoint(v) {
+  let url = (v || "").trim();
+  if (!url) return "http://10.42.0.1:8080/data";
+  if (!/^https?:\/\//i.test(url)) url = "http://" + url;
+  if (!/\/data(?:\?|$)/.test(url)) url = url.replace(/\/+$/, "") + "/data";
+  return url;
+}
+
+function setStatus(kind, text) {
+  dot.classList.toggle("ok", kind === "ok");
+  dot.classList.toggle("bad", kind === "bad");
+  statusEl.textContent = text;
+}
+
+async function poll() {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 900);
+  try {
+    const res = await fetch(endpoint, { signal: ctrl.signal, cache: "no-store", mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    data = await res.json();
+    setStatus("ok", "Conectado");
+    // t_inicio viene del backend (primer evento visto, nunca se trunca);
+    // antes se tomaba data.decisiones[0].t, que al truncarse a los
+    // ultimos 100 eventos hacia que "t (s)" mostrara tiempo-desde-
+    // reconexion en vez de tiempo-desde-el-inicio-real de la mision.
+    if (data.t_inicio !== null && data.t_inicio !== undefined && t0 === null) {
+      t0 = data.t_inicio;
+    }
+    render();
+  } catch (err) {
+    setStatus("bad", err.name === "AbortError" ? "Tiempo agotado" : String(err.message || err));
+  } finally {
+    clearTimeout(to);
+  }
+}
+
+function restartPolling() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(poll, Number($("rate").value));
+  poll();
+}
+
+$("btnConectar").addEventListener("click", () => {
+  endpoint = normalizeEndpoint(endpointInput.value);
+  endpointInput.value = endpoint;
+  localStorage.setItem("granprix.endpoint", endpoint);
+  restartPolling();
+});
+$("rate").addEventListener("change", restartPolling);
+
+// ---------------------------------------------------------------------
+// Utilidades de canvas
+// ---------------------------------------------------------------------
+function resize(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(rect.width * dpr));
+  const h = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function clear(ctx, w, h) {
+  ctx.fillStyle = "#191d24";
+  ctx.fillRect(0, 0, w, h);
+}
+
+// ---------------------------------------------------------------------
+// Panel 1: Mapa (grilla + paredes de referencia + celdas visitadas)
+// ---------------------------------------------------------------------
+function nombreACelda(nombre) {
+  // "C3" -> {col:2, row:2} (0-index, row0=abajo, igual a maze_model.py)
+  const col = nombre.charCodeAt(0) - 65;
+  const row = parseInt(nombre.slice(1), 10) - 1;
+  return { col, row };
+}
+
+function drawMapa() {
+  const canvas = $("cMapa");
+  const { ctx, w, h } = resize(canvas);
+  clear(ctx, w, h);
+  const d = data;
+  if (!d || !d.mapa) return;
+
+  const cols = d.mapa.cols, rows = d.mapa.rows;
+  const pad = 16;
+  const cell = Math.min((w - pad * 2) / cols, (h - pad * 2) / rows);
+  const ox = (w - cell * cols) / 2;
+  const oy = (h - cell * rows) / 2;
+  // fila 0 (row=0) es la de ABAJO (igual a maze_model.py) -> se dibuja abajo del canvas
+  const cx = (col) => ox + col * cell;
+  const cy = (row) => oy + (rows - 1 - row) * cell;
+
+  // celdas visitadas
+  ctx.fillStyle = "rgba(38,198,218,0.18)";
+  (d.visitadas || []).forEach((nombre) => {
+    const { col, row } = nombreACelda(nombre);
+    ctx.fillRect(cx(col) + 1, cy(row) + 1, cell - 2, cell - 2);
+  });
+
+  // celda actual
+  if (d.celda_actual) {
+    const { col, row } = nombreACelda(d.celda_actual);
+    ctx.fillStyle = "rgba(69,196,106,0.55)";
+    ctx.fillRect(cx(col) + 1, cy(row) + 1, cell - 2, cell - 2);
+  }
+
+  // grilla
+  ctx.strokeStyle = "#333b49";
+  ctx.lineWidth = 1;
+  for (let c = 0; c <= cols; c++) {
+    ctx.beginPath(); ctx.moveTo(ox + c * cell, oy); ctx.lineTo(ox + c * cell, oy + rows * cell); ctx.stroke();
+  }
+  for (let r = 0; r <= rows; r++) {
+    ctx.beginPath(); ctx.moveTo(ox, oy + r * cell); ctx.lineTo(ox + cols * cell, oy + r * cell); ctx.stroke();
+  }
+
+  // borde exterior
+  ctx.strokeStyle = "#edf2f7";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, cols * cell, rows * cell);
+
+  // paredes internas de referencia (pista_ejemplo.txt)
+  ctx.strokeStyle = "#edf2f7";
+  ctx.lineWidth = 3;
+  (d.mapa.muros || []).forEach(([a, b]) => {
+    const [ax, ay] = a, [bx, by] = b;
+    if (ax === bx) {
+      // vecinos en la misma columna -> pared horizontal entre filas
+      const row = Math.min(ay, by);
+      const yPix = cy(row);
+      ctx.beginPath(); ctx.moveTo(ox + ax * cell, yPix); ctx.lineTo(ox + (ax + 1) * cell, yPix); ctx.stroke();
+    } else {
+      // vecinos en la misma fila -> pared vertical entre columnas
+      const col = Math.max(ax, bx);
+      const xPix = ox + col * cell;
+      ctx.beginPath(); ctx.moveTo(xPix, cy(ay)); ctx.lineTo(xPix, cy(ay) + cell); ctx.stroke();
+    }
+  });
+
+  // inicio / meta
+  ctx.font = `${Math.max(9, cell * 0.28)}px sans-serif`;
+  ctx.fillStyle = "#9aa6b2";
+  if (d.mapa.inicio) {
+    const { col, row } = nombreACelda(d.mapa.inicio);
+    ctx.fillText("I", cx(col) + 4, cy(row) + cell - 4);
+  }
+  if (d.mapa.meta) {
+    const { col, row } = nombreACelda(d.mapa.meta);
+    ctx.fillText("M", cx(col) + cell - 14, cy(row) + 14);
+  }
+
+  // flecha de la ultima decision
+  if (d.ultima_decision && d.ultima_decision.elegida) {
+    const { col, row } = nombreACelda(d.ultima_decision.celda);
+    const dirs = { N: [0, -1], S: [0, 1], E: [1, 0], O: [-1, 0] };
+    const dd = dirs[d.ultima_decision.elegida];
+    if (dd) {
+      const x0 = cx(col) + cell / 2, y0 = cy(row) + cell / 2;
+      const x1 = x0 + dd[0] * cell * 0.4, y1 = y0 + dd[1] * cell * 0.4;
+      ctx.strokeStyle = "#ffd54f"; ctx.fillStyle = "#ffd54f"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      const ang = Math.atan2(y1 - y0, x1 - x0);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - 7 * Math.cos(ang - 0.5), y1 - 7 * Math.sin(ang - 0.5));
+      ctx.lineTo(x1 - 7 * Math.cos(ang + 0.5), y1 - 7 * Math.sin(ang + 0.5));
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// Panel 2: LiDAR (radar centrado en el robot)
+// ---------------------------------------------------------------------
+function drawLidar() {
+  const canvas = $("cLidar");
+  const { ctx, w, h } = resize(canvas);
+  clear(ctx, w, h);
+  const d = data;
+  const cx = w / 2, cy = h / 2;
+  const escala = (Math.min(w, h) / 2 - 20) / 2.2; // 2.2 m de rango visible
+
+  // circulos de referencia (1m, 2m)
+  ctx.strokeStyle = "#242a35";
+  [1, 2].forEach((r) => {
+    ctx.beginPath(); ctx.arc(cx, cy, r * escala, 0, Math.PI * 2); ctx.stroke();
+  });
+  ctx.strokeStyle = "#333b49";
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+
+  if (!d) return;
+
+  // puntos del scan: x=frente(arriba), y=izquierda -> pantalla: arriba=-y_canvas
+  ctx.fillStyle = "#26c6da";
+  (d.lidar || []).forEach(([x, y]) => {
+    const px = cx - y * escala;   // y=izquierda -> pantalla hacia la izquierda
+    const py = cy - x * escala;   // x=frente -> pantalla hacia arriba
+    ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // robot al centro (triangulo apuntando arriba = frente)
+  ctx.fillStyle = "#edf2f7";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 10); ctx.lineTo(cx - 7, cy + 8); ctx.lineTo(cx + 7, cy + 8);
+  ctx.closePath(); ctx.fill();
+
+  // etiquetas de zona
+  const z = d.zonas || {};
+  ctx.fillStyle = "#9aa6b2";
+  ctx.font = "11px sans-serif";
+  ctx.fillText(`F ${fmt(z.front)}`, cx - 14, 14);
+  ctx.fillText(`A ${fmt(z.back)}`, cx - 14, h - 6);
+  ctx.fillText(`I ${fmt(z.left)}`, 6, cy - 6);
+  ctx.textAlign = "right";
+  ctx.fillText(`D ${fmt(z.right)}`, w - 6, cy - 6);
+  ctx.textAlign = "left";
+}
+
+function fmt(v) {
+  return (v === null || v === undefined) ? "--" : Number(v).toFixed(2) + "m";
+}
+
+// ---------------------------------------------------------------------
+// Panel 3: Decisiones (tabla)
+// ---------------------------------------------------------------------
+function drawDecisiones() {
+  const tbody = $("tblDecisiones");
+  const d = data;
+  if (!d) return;
+  const filas = (d.decisiones || []);
+  tbody.innerHTML = filas.slice().reverse().map((e) => {
+    const t = t0 !== null ? (e.t - t0).toFixed(1) : e.t.toFixed(1);
+    const detalle = Object.entries(e.detalle || {}).map(([k, v]) => `${k}=${v}`).join("; ");
+    return `<tr><td>${t}</td><td><span class="tag ${e.tipo}">${e.tipo}</span></td>` +
+           `<td>${e.celda}</td><td>${e.heading}</td><td title="${detalle}">${detalle}</td></tr>`;
+  }).join("");
+}
+
+// ---------------------------------------------------------------------
+// Panel 4: Odometria (trayectoria continua)
+// ---------------------------------------------------------------------
+function drawOdom() {
+  const canvas = $("cOdom");
+  const { ctx, w, h } = resize(canvas);
+  clear(ctx, w, h);
+  const d = data;
+  if (!d || !d.traj || !d.traj.length) return;
+
+  const xs = d.traj.map((p) => p[0]), ys = d.traj.map((p) => p[1]);
+  const minX = Math.min(...xs, d.pos[0]) - 0.2, maxX = Math.max(...xs, d.pos[0]) + 0.2;
+  const minY = Math.min(...ys, d.pos[1]) - 0.2, maxY = Math.max(...ys, d.pos[1]) + 0.2;
+  const pad = 16;
+  const escala = Math.min((w - pad * 2) / Math.max(0.3, maxX - minX),
+                          (h - pad * 2) / Math.max(0.3, maxY - minY));
+  const ox = pad - minX * escala + (w - pad * 2 - (maxX - minX) * escala) / 2;
+  const oy = pad - minY * escala + (h - pad * 2 - (maxY - minY) * escala) / 2;
+  const tx = (x) => ox + x * escala;
+  const ty = (y) => h - (oy + y * escala); // Y hacia arriba en pantalla
+
+  ctx.strokeStyle = "#4f83ff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  d.traj.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(tx(x), ty(y)) : ctx.lineTo(tx(x), ty(y)); });
+  ctx.stroke();
+
+  // robot actual (triangulo orientado por yaw_deg)
+  const [px, py] = d.pos;
+  const yawRad = (d.yaw_deg || 0) * Math.PI / 180;
+  const cxp = tx(px), cyp = ty(py);
+  ctx.save();
+  ctx.translate(cxp, cyp);
+  ctx.rotate(-yawRad);
+  ctx.fillStyle = "#45c46a";
+  ctx.beginPath();
+  ctx.moveTo(0, -9); ctx.lineTo(-6, 6); ctx.lineTo(6, 6);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = "#9aa6b2";
+  ctx.font = "11px sans-serif";
+  ctx.fillText(`x=${px.toFixed(2)}m y=${py.toFixed(2)}m yaw=${(d.yaw_deg||0).toFixed(0)}°`, 8, h - 8);
+}
+
+// ---------------------------------------------------------------------
+function updateMetrics() {
+  const d = data || {};
+  $("mEstado").textContent = d.estado || "--";
+  $("mCelda").textContent = d.celda_actual || "--";
+  $("mHeading").textContent = d.heading_actual || "--";
+  const z = d.zonas || {};
+  $("mZonas").textContent = `${fmt(z.front)} / ${fmt(z.right)} / ${fmt(z.left)} / ${fmt(z.back)}`;
+  $("mCmd").textContent = `${(d.v_cmd || 0).toFixed(2)} / ${(d.w_cmd || 0).toFixed(2)}`;
+  const ud = d.ultima_decision;
+  $("mDecision").textContent = ud ? `${ud.celda} → ${ud.elegida || "?"}${ud.hacia ? " (" + ud.hacia + ")" : ""}` : "--";
+}
+
+function render() {
+  updateMetrics();
+  drawMapa();
+  drawLidar();
+  drawDecisiones();
+  drawOdom();
+}
+
+window.addEventListener("resize", () => { if (data) render(); });
+restartPolling();
+</script>
+</body>
+</html>

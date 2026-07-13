@@ -143,9 +143,11 @@ class SpeedrunNode(NodoRobotBase):
 
         seg = self.segmentos[self._seg_idx]
         lado = lado_para_girar(self.pose.heading, seg['dir'])
+        dx, dy = DIRS[seg['dir']]
+        hacia = nombre((self.pose.col + dx * seg['celdas'], self.pose.row + dy * seg['celdas']))
         self._log_evento(
             'DECISION_SEGMENTO', tramo=f'{self._seg_idx + 1}/{len(self.segmentos)}',
-            dir=seg['dir'], celdas=seg['celdas'], giro=lado,
+            dir=seg['dir'], celdas=seg['celdas'], giro=lado, hacia=hacia,
         )
         if lado == 'NINGUNO':
             self._iniciar_avance()

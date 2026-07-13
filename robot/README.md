@@ -24,8 +24,11 @@ robot/granprix_bot/
 │   ├── robot_state.py    # GridPose (celda+heading) + parámetros compartidos
 │   ├── motion.py         # NodoRobotBase: primitivas avanzar/girar/pausa cerradas por odometría
 │   ├── explorer_node.py  # Ronda 1: flood fill fase A + fase B, sensado real por LiDAR
-│   └── speedrun_node.py  # Ronda 2: carga el mapa, BFS, comprime tramos, ejecuta rápido
+│   ├── speedrun_node.py  # Ronda 2: carga el mapa, BFS, comprime tramos, ejecuta rápido
+│   └── web_dashboard_node.py  # Emisor HTTP/JSON para el dashboard web (ver sección 4.2)
 ├── config/granprix_bot_params.yaml
+├── config/pista_ejemplo_referencia.json  # paredes de pista_ejemplo.txt, para el panel de mapa
+├── web/index.html        # frontend del dashboard (canvas + JS puro, sin dependencias)
 ├── launch/explorar.launch.py
 ├── launch/speedrun.launch.py
 ├── package.xml / setup.py / setup.cfg
@@ -359,6 +362,53 @@ guarda en 3 lugares a la vez — implementado en
   `GIRO_FIN` contra el heading lógico que debería tener — un giro de
   90° real debería mover el yaw ~90° (con el fix de la sección 3.1,
   ya no ~86°).
+
+## 4.2 Dashboard web (en vivo)
+
+Mismo patrón que `visualizador_web.py` del proyecto de referencia
+(`capytown_g0_granprix`, carpeta aparte): el **robot** solo sirve JSON
+liviano por HTTP (`web_dashboard_node.py`, sin dibujar nada — no carga
+la Pi); la **laptop** abre `web/index.html` (HTML + Canvas + JS puro,
+sin frameworks ni dependencias) y hace polling a
+`http://<IP-del-robot>:8080/data`, dibujando todo ahí.
+
+Se lanza automáticamente junto con `explorar.launch.py` o
+`speedrun.launch.py` (`usar_dashboard:=true` por defecto — poner
+`usar_dashboard:=false` para desactivarlo).
+
+### Los 4 paneles
+
+1. **Mapa** — dibuja la grilla de `pista_ejemplo_referencia.json`
+   (paredes de la pista real, generado offline por `simulador_pista`)
+   con las celdas ya visitadas pintadas y una flecha amarilla con la
+   última dirección elegida (de los eventos `DECISION`/
+   `DECISION_SEGMENTO`, ver sección 4.1).
+2. **LiDAR** — radar centrado en el robot con el barrido crudo de
+   `/scan` (mismo `front_offset_deg`/`invert_left_right` que usan
+   `explorer`/`speedrun`, para que lo dibujado coincida con lo que el
+   robot realmente usa para decidir) y las 4 distancias de zona.
+3. **Decisiones** — la misma tabla que va al CSV (sección 4.1), en
+   vivo, más reciente arriba.
+4. **Odometría** — trayectoria continua (x,y) de `/odom_raw` (ya
+   corregida por `factor_dist_odom`/`factor_ang_odom`) con el robot
+   como triángulo orientado por `yaw`, más velocidad actual de
+   `/cmd_vel`.
+
+### Uso
+
+```bash
+# En el robot (ya se lanza solo con explorar.launch.py/speedrun.launch.py):
+ros2 run granprix_bot web_dashboard_node   # o dejar que el launch lo haga
+
+# En la laptop: abrir robot/granprix_bot/web/index.html en el navegador,
+# poner http://10.42.0.1:8080/data en el campo de arriba y "Conectar".
+```
+
+No usa mensajes personalizados ni tópicos nuevos de movimiento — solo
+**escucha** `/scan`, `/odom_raw`, `/cmd_vel`, `/robot_event` y
+`/robot_state` (los mismos que ya usan/publican `explorer`/
+`speedrun`), así que se puede correr o no sin afectar en nada la
+navegación real.
 
 ---
 

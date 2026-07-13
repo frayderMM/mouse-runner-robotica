@@ -145,3 +145,24 @@ speedrun:
 
     # --- Entrada: mapa que dejo explorer ---
     mapa_entrada: "~/capytown_resultados/mapa_descubierto.yaml"
+
+# Dashboard web -- ver robot/README.md seccion 7 y web/index.html.
+# Nodo aparte, self-contained (no comparte parametros con explorer/
+# speedrun): solo escucha topicos, no mueve al robot.
+web_dashboard:
+  ros__parameters:
+    puerto: 8080
+    scan_topic: /scan
+    odom_topic: /odom_raw
+    cmd_vel_topic: /cmd_vel
+    event_topic: /robot_event
+    robot_state_topic: /robot_state
+    front_offset_deg: 180.0
+    invert_left_right: true
+    max_range_use_m: 4.0
+    factor_dist_odom: 0.9474
+    factor_ang_odom: 0.9899
+    celda_inicio: A1
+    heading_inicial: N
+    # mapa_referencia se pasa desde el launch file (default: el JSON
+    # instalado en config/pista_ejemplo_referencia.json).
