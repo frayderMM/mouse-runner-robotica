@@ -96,9 +96,9 @@ PARAMETROS_DEFAULT = {
 
     # --- Pista (pistas/pista_ejemplo.txt) ---
     # Distancia comandada por AVANZAR (no la medida real de la pista,
-    # que sigue siendo 30cm) -- reducida de 30 a 25 para compensar
-    # sobre-recorrido por inercia/frenado real (ver granprix_bot_params.yaml).
-    'celda_cm': 25.0,
+    # que sigue siendo 30cm) -- ajustada en pista para compensar
+    # inercia/frenado real (ver granprix_bot_params.yaml).
+    'celda_cm': 29.0,
     'num_columnas': 12,
     'num_filas': 8,
     'celda_inicio': 'A1',

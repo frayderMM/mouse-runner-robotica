@@ -31,13 +31,13 @@ explorer:
     control_rate_hz: 20.0
 
     # --- Pista (pistas/pista_ejemplo.txt) ---
-    # Reducido de 30 a 25 (pedido explicito): el robot recorria mas de
-    # lo comandado por inercia/frenado real, asi que se acorta la
-    # distancia de avance por celda para compensar. La pista fisica
-    # (pistas/pista_ejemplo.txt) sigue siendo de celdas de 30cm --
-    # este valor es SOLO la distancia que se le pide recorrer a cada
-    # AVANZAR, no una medida de la pista.
-    celda_cm: 25.0
+    # Ajustado en pista (valor en calibracion, no definitivo): el robot
+    # recorria mas o menos de lo comandado por inercia/frenado real,
+    # asi que se ajusta la distancia de avance por celda para
+    # compensar. La pista fisica (pistas/pista_ejemplo.txt) sigue
+    # siendo de celdas de 30cm -- este valor es SOLO la distancia que
+    # se le pide recorrer a cada AVANZAR, no una medida de la pista.
+    celda_cm: 29.0
     num_columnas: 12
     num_filas: 8
     celda_inicio: A1
@@ -143,13 +143,13 @@ speedrun:
     robot_state_topic: /robot_state
     control_rate_hz: 20.0
 
-    # Reducido de 30 a 25 (pedido explicito): el robot recorria mas de
-    # lo comandado por inercia/frenado real, asi que se acorta la
-    # distancia de avance por celda para compensar. La pista fisica
-    # (pistas/pista_ejemplo.txt) sigue siendo de celdas de 30cm --
-    # este valor es SOLO la distancia que se le pide recorrer a cada
-    # AVANZAR, no una medida de la pista.
-    celda_cm: 25.0
+    # Ajustado en pista (valor en calibracion, no definitivo): el robot
+    # recorria mas o menos de lo comandado por inercia/frenado real,
+    # asi que se ajusta la distancia de avance por celda para
+    # compensar. La pista fisica (pistas/pista_ejemplo.txt) sigue
+    # siendo de celdas de 30cm -- este valor es SOLO la distancia que
+    # se le pide recorrer a cada AVANZAR, no una medida de la pista.
+    celda_cm: 29.0
     num_columnas: 12
     num_filas: 8
     celda_inicio: A1
