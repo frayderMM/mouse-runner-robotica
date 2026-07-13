@@ -112,7 +112,7 @@ PARAMETROS_DEFAULT = {
     # false: en pista real las zonas izquierda/derecha del LiDAR
     # resultaron intercambiadas con true (ver granprix_bot_params.yaml).
     'invert_left_right': False,
-    'front_window_deg': [-15.0, 15.0],
+    'front_window_deg': [-5.0, 5.0],
     'right_window_deg': [-110.0, -70.0],
     'left_window_deg': [70.0, 110.0],
     'back_window_deg': [165.0, 195.0],
