@@ -128,6 +128,15 @@ docker exec -it -e DISPLAY=:0 quizzical_ellis /bin/bash
 > de `lidar_viz.py`, RViz, etc.) se muestren en el VNC del robot.
 
 ### Paso 4 — Pull y build (dentro del contenedor)
+
+Para `granprix_bot` (este repo, `simulador_pista` — lo que se usa ahora):
+```bash
+cd /root/yahboomcar_ws/src/simulador-pista && git fetch origin && git reset --hard origin/main
+cd /root/yahboomcar_ws && colcon build --packages-select granprix_bot && source install/setup.bash
+```
+
+Para el repo original `reto-final` (`capytown_interfaces`/`capytown_granprix`,
+ya no se toca — ver sección 0):
 ```bash
 cd /root/yahboomcar_ws/src/reto-final && git fetch origin && git reset --hard origin/main
 cd /root/yahboomcar_ws && colcon build --packages-select capytown_interfaces capytown_granprix && source install/setup.bash
@@ -141,10 +150,20 @@ ros2 topic info /odom_raw
 ```
 
 ### Paso 6 — Lanzar y probar en pista
+
+Para `granprix_bot`:
+```bash
+ros2 launch granprix_bot explorar.launch.py    # Ronda 1
+ros2 launch granprix_bot speedrun.launch.py    # Ronda 2 (despues de la 1)
+```
+> Ver `robot/README.md` para la lista completa de argumentos
+> (`params_file`, `usar_dashboard`) y la guía de calibración por nodo.
+
+Para el repo original `reto-final`:
 ```bash
 ros2 launch capytown_granprix granprix_bringup.launch.py ronda:=1 usar_camara:=true
 ```
-> Ver `README.md` (raíz del repo) para la lista completa de argumentos
+> Ver `README.md` (raíz de ese repo) para la lista completa de argumentos
 > (`ronda`, `usar_camara`, `params_file`) y la guía de calibración por
 > nodo (sección 5).
 
@@ -161,8 +180,9 @@ PC, commit, push, y repetir el pull en el robot.
 - IP del robot: `10.42.0.1`, usuario `root`.
 - Contenedor Docker: **`quizzical_ellis`** (no `friendly_pike`, ese nombre
   quedó obsoleto de una etapa anterior del proyecto).
-- Workspace en el robot: `/root/yahboomcar_ws`. Carpeta del repo dentro de
-  `src/`: **`reto-final`**.
+- Workspace en el robot: `/root/yahboomcar_ws`. Carpetas del repo dentro de
+  `src/`: **`simulador-pista`** (este repo, `granprix_bot` — activo) y
+  **`reto-final`** (repo original, ya no se toca).
 - Solo se sube a GitHub el código de los paquetes ROS2. Archivos de
   trabajo del PC (notas, imágenes, informes) pueden quedarse solo
   local si no hace falta que el robot los vea.
