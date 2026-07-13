@@ -13,6 +13,7 @@ Convencion de angulo en el marco del robot: 0=frente, +90=izquierda,
 import math
 
 from .geometry_utils import normalize_angle
+from .robot_state import GIRO_DERECHA, GIRO_IZQUIERDA, GIRO_180
 
 INF = math.inf
 
@@ -58,10 +59,9 @@ def calcular_zonas(scan, front_offset_deg: float, invert_left_right: bool,
 
 # Zonas relativas -> direccion absoluta segun heading actual del robot
 # (N/E/S/O). "front" pasa a ser la direccion del heading; "right" es
-# heading girado -90 (derecha); "left" +90; "back" +180.
-_ROTAR_DERECHA = {"N": "E", "E": "S", "S": "O", "O": "N"}
-_ROTAR_IZQUIERDA = {"N": "O", "O": "S", "S": "E", "E": "N"}
-_OPUESTO = {"N": "S", "S": "N", "E": "O", "O": "E"}
+# heading girado -90 (derecha); "left" +90; "back" +180. Reusa las
+# tablas de robot_state.py (no una copia local) para que el sensado de
+# muros y la logica de giro nunca queden desincronizados.
 
 
 def direcciones_absolutas(heading: str) -> dict:
@@ -69,7 +69,7 @@ def direcciones_absolutas(heading: str) -> dict:
     'back': dir_abs} para el heading actual (N/E/S/O)."""
     return {
         "front": heading,
-        "right": _ROTAR_DERECHA[heading],
-        "left": _ROTAR_IZQUIERDA[heading],
-        "back": _OPUESTO[heading],
+        "right": GIRO_DERECHA[heading],
+        "left": GIRO_IZQUIERDA[heading],
+        "back": GIRO_180[heading],
     }

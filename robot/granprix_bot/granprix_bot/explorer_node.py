@@ -84,11 +84,19 @@ class ExplorerNode(NodoRobotBase):
     # Decision (identica a Explorer.paso del simulador)
     # ------------------------------------------------------------------
     def _paso(self, pos, targets):
+        """Devuelve (d_elegida, siguiente) o (None, None) si no hay
+        ninguna direccion sin pared conocida -- en el simulador esto
+        nunca pasa (el mapa viene garantizado resoluble por datos
+        ground-truth), pero con sensado LiDAR real, ruido/desalineacion
+        puede marcar las 4 direcciones de una celda como pared. El
+        llamador (_handle_decidir) debe manejar el caso None."""
         dist = self.mz.flood(targets, self.conocidos)
         opciones = []
         for n, d in self.mz.vecinos(pos):
             if wall(pos, n) not in self.conocidos:
                 opciones.append((dist.get(n, INF), self.p.orden_desempate.index(d), d, n))
+        if not opciones:
+            return None, None
         opciones.sort()
         _, _, d_elegida, siguiente = opciones[0]
         return d_elegida, siguiente
@@ -102,6 +110,9 @@ class ExplorerNode(NodoRobotBase):
         if self._terminado:
             self._publish_twist_vacio()
             return
+        if self.obstaculo_abandonado:
+            self._fallar('obstaculo al frente persistente (ver warnings anteriores)')
+            return
         if self._handle_obstaculo_frente():
             return
 
@@ -111,12 +122,17 @@ class ExplorerNode(NodoRobotBase):
         handler()
 
     def _handle_iniciar(self):
-        self._sensar_celda_actual()
         self._iniciar_pausa()
         self._set_state('PAUSA_CELDA')
 
     def _handle_pausa_celda(self):
         if self._tick_pausa(self.p.tiempo_pausa_antes_girar_s):
+            # Sensar DESPUES de la pausa (no antes): la pausa existe
+            # para dejar que el chasis se asiente (vibracion/inercia de
+            # frenado) antes de confiar en la lectura del LiDAR -- si
+            # se sensa apenas se detecta la llegada, esa lectura puede
+            # tomarse con el robot todavia en movimiento residual.
+            self._sensar_celda_actual()
             self._set_state('DECIDIR')
 
     def _handle_decidir(self):
@@ -130,6 +146,15 @@ class ExplorerNode(NodoRobotBase):
             targets = [self.mz.goal]
         else:
             candidata = self.mz.bfs(self.mz.start, self.mz.goal, walls=self.conocidos)
+            if candidata is None:
+                # Una lectura de LiDAR (ruido o desalineacion) marco un
+                # muro que, sumado a lo ya conocido, desconecta el
+                # camino a la meta -- imposible en el simulador
+                # (ground truth garantiza solucion), real con sensado
+                # ruidoso. No hay forma segura de seguir explorando con
+                # un mapa que se contradice a si mismo: se aborta.
+                self._fallar('mapa inconsistente en fase B (bfs sin camino a la meta)')
+                return
             pendientes = [c for c in candidata if c not in self.sensadas]
             if not pendientes:
                 self._terminar()
@@ -143,6 +168,11 @@ class ExplorerNode(NodoRobotBase):
             return
 
         d_elegida, siguiente = self._paso(pos, targets)
+        if d_elegida is None:
+            # Las 4 direcciones de la celda actual quedaron marcadas
+            # como pared (sensado ruidoso) -- no hay opcion segura.
+            self._fallar(f'sin direccion abierta en {nombre(pos)} (las 4 zonas marcaron pared)')
+            return
         self._direccion_elegida = d_elegida
 
         lado = lado_para_girar(self.pose.heading, d_elegida)
@@ -168,9 +198,10 @@ class ExplorerNode(NodoRobotBase):
     def _handle_avanzar(self):
         if self._tick_avance():
             self.pose.avanzar()
-            self._sensar_celda_actual()
             self._iniciar_pausa()
             self._set_state('PAUSA_CELDA')
+            # El sensado ocurre en _handle_pausa_celda, DESPUES de la
+            # pausa de 1s -- ver comentario ahi.
 
     def _terminar(self):
         self._publish_twist_vacio()
@@ -182,6 +213,18 @@ class ExplorerNode(NodoRobotBase):
             f'{len(self.sensadas)}/{self.mz.cols * self.mz.rows} celdas sensadas, '
             f'mapa guardado en {self.p.mapa_salida}'
         )
+
+    def _fallar(self, motivo: str):
+        """Aborto controlado: detiene el robot y deja de mandar
+        comandos, en vez de crashear el nodo (IndexError/TypeError sin
+        manejar) o quedar esperando para siempre en silencio. Guarda el
+        mapa parcial de todas formas -- util para diagnosticar que paso
+        y para no perder lo ya sensado si se necesita reintentar."""
+        self._publish_twist_vacio()
+        self._terminado = True
+        self._set_state('TERMINADO')
+        self.get_logger().error(f'EXPLORACION ABORTADA: {motivo}')
+        self._guardar_mapa()
 
     def _guardar_mapa(self):
         """Mismo formato 4-bits (bit0=N bit1=E bit2=S bit3=O) que
@@ -216,13 +259,15 @@ class ExplorerNode(NodoRobotBase):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = ExplorerNode()
+    node = None
     try:
+        node = ExplorerNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
+        if node is not None:
+            node.destroy_node()
         rclpy.try_shutdown()
 
 

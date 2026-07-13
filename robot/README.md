@@ -112,8 +112,17 @@ rotación en el sitio. Ambas primitivas cierran el lazo contra
 | `velocidad_giro_lineal_mps` | 0.06 |
 | `velocidad_giro_angular_radps` | 0.6 |
 | `angulo_giro_deg` | 90.0 |
-| `tolerancia_giro_deg` | 4.0 |
-| `angulo_maximo_giro_deg` | 150.0 (tope de seguridad) |
+| `margen_seguridad_giro_deg` | 60.0 (tope de seguridad, **relativo** al objetivo de cada giro: 90+60=150 para giros normales, 180+60=240 para ATRAS) |
+| `margen_singularidad_atras_deg` | 4.0 (solo el giro ATRAS apunta a 180−4°, para no quedar justo en el punto de wraparound de ±180°) |
+
+> **Corregido en revisión de código:** el giro ya no se detiene con
+> una tolerancia restada del objetivo (antes todo giro de 90° quedaba
+> sistemáticamente ~4° corto), y el tope de seguridad ahora es un
+> margen relativo al objetivo de cada giro, no un ángulo absoluto fijo
+> (antes 150° absoluto era **menor** que el objetivo real de un giro
+> ATRAS de 180°, así que todo giro de 180° se cortaba en ~150° reales
+> aunque el modelo lógico ya aplicara el giro completo). Ver
+> `motion.py::_tick_giro`.
 
 ### LiDAR — `CALIBRACION_LIDAR_VISION.md`
 
@@ -191,6 +200,37 @@ falta verificar en el robot real** (sección 5, orden de calibración):
 |---|---:|
 | `umbral_colision_m` | 0.10 |
 | `tiempo_espera_obstaculo_s` | 2.0 |
+| `max_intentos_obstaculo` | 5 (si el obstáculo sigue bloqueando tras 5 esperas de 2s = 10s, aborta la misión en vez de esperar para siempre en silencio) |
+
+---
+
+## 3.1 Correcciones tras revisión de código (2026-07)
+
+Una revisión de código con 8 agentes en paralelo encontró varios
+fallos reales antes de tocar el robot. Corregidos:
+
+- **`explorer_node.py` — crash por `IndexError`/`TypeError`.** `_paso()`
+  y la verificación de fase B asumían (como el simulador, que usa
+  datos ground-truth) que siempre hay una dirección abierta y que el
+  BFS siempre encuentra camino. Con sensado LiDAR real y ruidoso, esto
+  puede no cumplirse. Ahora ambos casos se manejan con un aborto
+  controlado (`_fallar()`: detiene el robot, guarda el mapa parcial
+  para diagnóstico, no crashea el nodo).
+- **`motion.py` — giro de 180° cortado en ~150°.** Ver sección 3,
+  tabla de avance y giro.
+- **`motion.py` — todo giro de 90° quedaba ~4° corto.** Idem.
+- **`explorer_node.py` — se sensaba antes de la pausa de 1s, no
+  después.** El orden ahora es literal: llega → pausa 1s → sensa →
+  decide (antes sensaba apenas detectaba la llegada, con el chasis
+  posiblemente todavía asentándose del frenado).
+- **`speedrun_node.py` — recursos de ROS2 sin cerrar si el mapa falta.**
+  `main()` ahora construye el nodo dentro del `try/finally`.
+- **Duplicación de tablas de dirección.** `lidar.py` reusa las tablas
+  de rotación de `robot_state.py` en vez de mantener una copia propia;
+  `speedrun_node.py` deriva `_DIR_POR_DELTA` de `maze_model.DIRS` en
+  vez de copiarlo a mano.
+- **Espera infinita ante un obstáculo.** Ver `max_intentos_obstaculo`
+  arriba.
 
 ---
 

@@ -18,11 +18,13 @@ import os
 import rclpy
 from geometry_msgs.msg import Twist
 
-from .maze_model import Maze, celda, nombre, wall
+from .maze_model import DIRS, Maze, celda, nombre, wall
 from .motion import NodoRobotBase
 from .robot_state import lado_para_girar
 
-_DIR_POR_DELTA = {(0, 1): 'N', (1, 0): 'E', (0, -1): 'S', (-1, 0): 'O'}
+# Derivado de DIRS (maze_model.py), no copiado a mano -- si DIRS
+# cambia, esto queda sincronizado automaticamente.
+_DIR_POR_DELTA = {delta: d for d, delta in DIRS.items()}
 
 
 class SpeedrunNode(NodoRobotBase):
@@ -121,6 +123,12 @@ class SpeedrunNode(NodoRobotBase):
         if self._terminado:
             self._publish_twist(Twist())
             return
+        if self.obstaculo_abandonado:
+            self._publish_twist(Twist())
+            self._terminado = True
+            self._set_state('META')
+            self.get_logger().error('SPEEDRUN ABORTADO: obstaculo al frente persistente')
+            return
         if self._handle_obstaculo_frente():
             return
 
@@ -185,13 +193,15 @@ class SpeedrunNode(NodoRobotBase):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = SpeedrunNode()
+    node = None
     try:
+        node = SpeedrunNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
+        if node is not None:
+            node.destroy_node()
         rclpy.try_shutdown()
 
 

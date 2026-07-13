@@ -56,14 +56,26 @@ explorer:
     velocidad_giro_lineal_mps: 0.06
     velocidad_giro_angular_radps: 0.6
     angulo_giro_deg: 90.0
-    angulo_maximo_giro_deg: 150.0
-    tolerancia_giro_deg: 4.0
+    # Margen de seguridad SOBRE el objetivo de cada giro (no un angulo
+    # absoluto): 90+60=150 para giros de 90, 180+60=240 para ATRAS.
+    # Antes era un valor absoluto (150) menor que el objetivo real de
+    # un giro ATRAS (180), asi que todo giro de 180 se cortaba en
+    # ~150 grados reales -- ver motion.py::_tick_giro.
+    margen_seguridad_giro_deg: 60.0
+    # Solo para el giro ATRAS (180): apunta a un poco menos de 180
+    # para evitar la singularidad de angle_diff() justo en el
+    # wraparound (-180/180). NO se usa para acortar giros de 90.
+    margen_singularidad_atras_deg: 4.0
     # Reusado tambien como pausa de 1s al llegar a cada celda (sensado).
     tiempo_pausa_antes_girar_s: 1.0
 
     # --- Seguridad ---
     umbral_colision_m: 0.10
     tiempo_espera_obstaculo_s: 2.0
+    # Si el obstaculo sigue bloqueando despues de esta cantidad de
+    # ciclos de espera, se aborta la mision en vez de esperar para
+    # siempre en silencio.
+    max_intentos_obstaculo: 5
 
     # --- Salida: mapa descubierto, lo consume speedrun despues ---
     mapa_salida: "~/capytown_resultados/mapa_descubierto.yaml"
@@ -107,12 +119,13 @@ speedrun:
     velocidad_giro_lineal_mps: 0.06
     velocidad_giro_angular_radps: 0.6
     angulo_giro_deg: 90.0
-    angulo_maximo_giro_deg: 150.0
-    tolerancia_giro_deg: 4.0
+    margen_seguridad_giro_deg: 60.0
+    margen_singularidad_atras_deg: 4.0
     tiempo_pausa_antes_girar_s: 1.0
 
     umbral_colision_m: 0.10
     tiempo_espera_obstaculo_s: 2.0
+    max_intentos_obstaculo: 5
 
     # --- Entrada: mapa que dejo explorer ---
     mapa_entrada: "~/capytown_resultados/mapa_descubierto.yaml"

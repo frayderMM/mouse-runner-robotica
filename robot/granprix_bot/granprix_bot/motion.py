@@ -50,6 +50,8 @@ class NodoRobotBase(Node):
 
         self._esperando_obstaculo = False
         self._espera_obstaculo_inicio = None
+        self._intentos_obstaculo = 0
+        self.obstaculo_abandonado = False
 
         self._cmd_pub = self.create_publisher(Twist, self.p.cmd_vel_topic, 10)
 
@@ -117,9 +119,20 @@ class NodoRobotBase(Node):
                     self.get_clock().now() - self._espera_obstaculo_inicio
                 ).nanoseconds / 1e9
                 if elapsed >= self.p.tiempo_espera_obstaculo_s:
+                    self._intentos_obstaculo += 1
+                    self.get_logger().warn(
+                        f'obstaculo sigue bloqueando tras {self._intentos_obstaculo} '
+                        f'intento(s) de espera de {self.p.tiempo_espera_obstaculo_s:.0f}s'
+                    )
+                    if self._intentos_obstaculo >= self.p.max_intentos_obstaculo:
+                        self.get_logger().error(
+                            'obstaculo persistente -- abortando mision (obstaculo_abandonado=True)'
+                        )
+                        self.obstaculo_abandonado = True
                     self._espera_obstaculo_inicio = self.get_clock().now()
                 return True
             self._esperando_obstaculo = False
+            self._intentos_obstaculo = 0
             return False
 
         if bloqueado:
@@ -213,18 +226,38 @@ class NodoRobotBase(Node):
 
     def _tick_giro(self, lado: str) -> bool:
         """lado in {'DERECHA', 'IZQUIERDA', 'ATRAS'}. Devuelve True
-        cuando el giro objetivo (90 o 180) ya se completo."""
+        cuando el giro objetivo (90 o 180) ya se completo.
+
+        El objetivo NO se resta con ninguna tolerancia -- antes se
+        restaba `tolerancia_giro_deg` (pensada para una variante de
+        giro distinta, con lazo cerrado por error angular, no
+        implementada aca) y eso hacia que TODO giro quedara
+        sistematicamente ~4 grados corto. Ahora se espera a que
+        `angulo_girado` alcance el objetivo completo (con hasta ~1-2
+        grados de overshoot por el tick discreto de 20Hz, mucho mejor
+        que quedar corto).
+
+        El tope de seguridad (`margen_seguridad_giro_rad`) es un
+        MARGEN sobre el objetivo de ESTE giro, no un angulo absoluto
+        fijo -- antes era un angulo absoluto (150) menor que el
+        objetivo real de un giro ATRAS (180), asi que todo giro de 180
+        se cortaba en ~150 grados reales aunque GridPose.girar ya
+        hubiera aplicado el giro logico completo de 180."""
         if lado == 'ATRAS':
-            objetivo_rad = math.pi
-            izquierda = True  # convencion fija, ver nota en plan_executor_node.py
+            # objetivo ligeramente menor a pi: angle_diff() devuelve en
+            # (-pi, pi], asi que apuntar a exactamente pi cae en el
+            # punto de wraparound (riesgo de nunca cruzar la
+            # comparacion por precision de punto flotante justo ahi).
+            objetivo_rad = math.pi - self.p.margen_singularidad_atras_rad
+            izquierda = True  # convencion fija: ATRAS siempre gira por la izquierda
         else:
             objetivo_rad = self.p.angulo_giro_rad
             izquierda = (lado == 'IZQUIERDA')
 
         angulo_girado = abs(angle_diff(self._yaw, self._yaw_inicio_giro))
+        tope_seguridad_rad = objetivo_rad + self.p.margen_seguridad_giro_rad
 
-        if (angulo_girado >= objetivo_rad - self.p.tolerancia_giro_rad
-                or angulo_girado >= self.p.angulo_maximo_giro_rad):
+        if angulo_girado >= objetivo_rad or angulo_girado >= tope_seguridad_rad:
             self._publish_twist(Twist())
             return True
 

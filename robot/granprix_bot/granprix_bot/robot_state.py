@@ -14,9 +14,12 @@ from dataclasses import dataclass
 
 from .maze_model import DIRS, celda, nombre
 
-_GIRO_DERECHA = {"N": "E", "E": "S", "S": "O", "O": "N"}
-_GIRO_IZQUIERDA = {"N": "O", "O": "S", "S": "E", "E": "N"}
-_GIRO_180 = {"N": "S", "S": "N", "E": "O", "O": "E"}
+# Publicas (sin guion bajo) a proposito: lidar.py las reusa para
+# direcciones_absolutas() en vez de mantener su propia copia -- un
+# solo lugar para la convencion de rotacion N/E/S/O.
+GIRO_DERECHA = {"N": "E", "E": "S", "S": "O", "O": "N"}
+GIRO_IZQUIERDA = {"N": "O", "O": "S", "S": "E", "E": "N"}
+GIRO_180 = {"N": "S", "S": "N", "E": "O", "O": "E"}
 
 
 @dataclass
@@ -46,11 +49,11 @@ class GridPose:
     def girar(self, lado: str):
         """lado in {'DERECHA', 'IZQUIERDA', 'ATRAS'}."""
         if lado == 'DERECHA':
-            self.heading = _GIRO_DERECHA[self.heading]
+            self.heading = GIRO_DERECHA[self.heading]
         elif lado == 'IZQUIERDA':
-            self.heading = _GIRO_IZQUIERDA[self.heading]
+            self.heading = GIRO_IZQUIERDA[self.heading]
         elif lado == 'ATRAS':
-            self.heading = _GIRO_180[self.heading]
+            self.heading = GIRO_180[self.heading]
         else:
             raise ValueError(f'lado de giro desconocido: {lado}')
 
@@ -60,9 +63,9 @@ def lado_para_girar(heading_actual: str, direccion_deseada: str) -> str:
     girar para pasar de heading_actual a direccion_deseada."""
     if heading_actual == direccion_deseada:
         return 'NINGUNO'
-    if _GIRO_DERECHA[heading_actual] == direccion_deseada:
+    if GIRO_DERECHA[heading_actual] == direccion_deseada:
         return 'DERECHA'
-    if _GIRO_IZQUIERDA[heading_actual] == direccion_deseada:
+    if GIRO_IZQUIERDA[heading_actual] == direccion_deseada:
         return 'IZQUIERDA'
     return 'ATRAS'
 
@@ -117,13 +120,31 @@ PARAMETROS_DEFAULT = {
     'velocidad_giro_lineal_mps': 0.06,
     'velocidad_giro_angular_radps': 0.6,
     'angulo_giro_deg': 90.0,
-    'angulo_maximo_giro_deg': 150.0,
-    'tolerancia_giro_deg': 4.0,
+    # Tope de seguridad EXPRESADO COMO MARGEN sobre el objetivo de cada
+    # giro (no como angulo absoluto): un giro de 90 topea a 90+60=150,
+    # uno de 180 (ATRAS) topea a 180+60=240 -- antes era un unico valor
+    # absoluto (150) que quedaba POR DEBAJO del objetivo real de un
+    # giro ATRAS (180), cortando todo giro de 180 en ~150 grados reales
+    # aunque el modelo logico (GridPose) ya hubiera aplicado el giro
+    # completo. Ver motion.py::_tick_giro.
+    'margen_seguridad_giro_deg': 60.0,
+    # Pequeno margen numerico (no de "aceptar giro corto"): un giro
+    # ATRAS objetivo exactamente 180 esta justo en el punto donde
+    # angle_diff() da la vuelta (rango (-180, 180]), asi que se apunta
+    # a un poco menos para evitar quedar oscilando justo en ese punto
+    # por precision de punto flotante. NO se usa para restar del
+    # objetivo de los giros de 90 (eso era el bug: todo giro quedaba
+    # sistematicamente ~4 grados corto).
+    'margen_singularidad_atras_deg': 4.0,
     'tiempo_pausa_antes_girar_s': 1.0,
 
     # --- Seguridad (identica a state_machine_node del proyecto original) ---
     'umbral_colision_m': 0.10,
     'tiempo_espera_obstaculo_s': 2.0,
+    # Si el obstaculo al frente sigue bloqueando despues de esta
+    # cantidad de ciclos de espera (cada uno de tiempo_espera_obstaculo_s),
+    # se aborta la mision en vez de esperar para siempre en silencio.
+    'max_intentos_obstaculo': 5,
 
     # --- Salida ---
     'mapa_salida': '~/capytown_resultados/mapa_descubierto.yaml',
@@ -181,11 +202,12 @@ class Parametros:
         self.velocidad_giro_lineal_mps = float(g('velocidad_giro_lineal_mps'))
         self.velocidad_giro_angular_radps = float(g('velocidad_giro_angular_radps'))
         self.angulo_giro_rad = math.radians(float(g('angulo_giro_deg')))
-        self.angulo_maximo_giro_rad = math.radians(float(g('angulo_maximo_giro_deg')))
-        self.tolerancia_giro_rad = math.radians(float(g('tolerancia_giro_deg')))
+        self.margen_seguridad_giro_rad = math.radians(float(g('margen_seguridad_giro_deg')))
+        self.margen_singularidad_atras_rad = math.radians(float(g('margen_singularidad_atras_deg')))
         self.tiempo_pausa_antes_girar_s = float(g('tiempo_pausa_antes_girar_s'))
 
         self.umbral_colision_m = float(g('umbral_colision_m'))
         self.tiempo_espera_obstaculo_s = float(g('tiempo_espera_obstaculo_s'))
+        self.max_intentos_obstaculo = int(g('max_intentos_obstaculo'))
 
         self.mapa_salida = str(g('mapa_salida'))
