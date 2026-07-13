@@ -1,5 +1,5 @@
 # Parametros de granprix_bot -- pista del examen (pistas/pista_ejemplo.txt,
-# 12x8 celdas de 30x30 cm, inicio A1, meta L8).
+# 12x8 celdas de 60x60 cm, inicio A1, meta L8).
 #
 # Calibracion tomada de AVANCE_Y_GIRO_CALIBRADO.md (avance/giro por
 # odometria) y CALIBRACION_LIDAR_VISION.md (zonas de LiDAR), ambos en
@@ -31,13 +31,10 @@ explorer:
     control_rate_hz: 20.0
 
     # --- Pista (pistas/pista_ejemplo.txt) ---
-    # Ajustado en pista (valor en calibracion, no definitivo): el robot
-    # recorria mas o menos de lo comandado por inercia/frenado real,
-    # asi que se ajusta la distancia de avance por celda para
-    # compensar. La pista fisica (pistas/pista_ejemplo.txt) sigue
-    # siendo de celdas de 30cm -- este valor es SOLO la distancia que
-    # se le pide recorrer a cada AVANZAR, no una medida de la pista.
-    celda_cm: 30.0
+    # Pista reducida (menos paredes internas) y celdas mas grandes: de
+    # 30x30cm a 60x60cm, mismo layout de 12x8 celdas (ver
+    # config/pista_ejemplo_referencia.json, regenerado del .txt actual).
+    celda_cm: 60.0
     num_columnas: 12
     num_filas: 8
     celda_inicio: A1
@@ -65,10 +62,10 @@ explorer:
     left_window_deg: [70.0, 110.0]
     back_window_deg: [165.0, 195.0]
     max_range_use_m: 4.0
-    # Umbral de "hay pared" al sensar una celda: celda_cm/2 (15cm) +
-    # margen de seguridad (5cm) = 20cm. Si el LiDAR mide menos que
-    # esto en una zona, se marca pared en esa direccion.
-    umbral_pared_m: 0.20
+    # Umbral de "hay pared" al sensar una celda: celda_cm/2 (30cm, con
+    # celdas de 60cm) + margen de seguridad (5cm) = 35cm. Si el LiDAR
+    # mide menos que esto en una zona, se marca pared en esa direccion.
+    umbral_pared_m: 0.35
     # Validacion por consenso (ver motion.py::_tick_validacion_muros):
     # una sola lectura de LiDAR puede fallar por ruido o desalineacion;
     # se toman sensado_muestras lecturas seguidas y una zona solo se
@@ -143,13 +140,9 @@ speedrun:
     robot_state_topic: /robot_state
     control_rate_hz: 20.0
 
-    # Ajustado en pista (valor en calibracion, no definitivo): el robot
-    # recorria mas o menos de lo comandado por inercia/frenado real,
-    # asi que se ajusta la distancia de avance por celda para
-    # compensar. La pista fisica (pistas/pista_ejemplo.txt) sigue
-    # siendo de celdas de 30cm -- este valor es SOLO la distancia que
-    # se le pide recorrer a cada AVANZAR, no una medida de la pista.
-    celda_cm: 30.0
+    # Pista reducida (menos paredes internas) y celdas mas grandes: de
+    # 30x30cm a 60x60cm, mismo layout de 12x8 celdas.
+    celda_cm: 60.0
     num_columnas: 12
     num_filas: 8
     celda_inicio: A1
@@ -171,7 +164,7 @@ speedrun:
     left_window_deg: [70.0, 110.0]
     back_window_deg: [165.0, 195.0]
     max_range_use_m: 4.0
-    umbral_pared_m: 0.20
+    umbral_pared_m: 0.35
     sensado_muestras: 5
     sensado_consenso_minimo: 3
 

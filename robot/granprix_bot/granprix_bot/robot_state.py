@@ -95,10 +95,9 @@ PARAMETROS_DEFAULT = {
     'control_rate_hz': 20.0,
 
     # --- Pista (pistas/pista_ejemplo.txt) ---
-    # Distancia comandada por AVANZAR (no la medida real de la pista,
-    # que sigue siendo 30cm) -- ajustada en pista para compensar
-    # inercia/frenado real (ver granprix_bot_params.yaml).
-    'celda_cm': 30.0,
+    # Pista reducida (menos paredes internas) y celdas mas grandes: de
+    # 30x30cm a 60x60cm, mismo layout de 12x8 celdas.
+    'celda_cm': 60.0,
     'num_columnas': 12,
     'num_filas': 8,
     'celda_inicio': 'A1',
@@ -117,9 +116,9 @@ PARAMETROS_DEFAULT = {
     'left_window_deg': [70.0, 110.0],
     'back_window_deg': [165.0, 195.0],
     'max_range_use_m': 4.0,
-    # Umbral de "hay pared" al sensar una celda: celda_cm/2 (15cm para
-    # celdas de 30cm, ver nota en README/FLUJO) + margen de seguridad.
-    'umbral_pared_m': 0.20,
+    # Umbral de "hay pared" al sensar una celda: celda_cm/2 (30cm para
+    # celdas de 60cm) + margen de seguridad (5cm) = 35cm.
+    'umbral_pared_m': 0.35,
     # Validacion del sensado por consenso (ver motion.py::_tick_validacion_muros):
     # una sola lectura de LiDAR puede fallar por ruido o desalineacion,
     # asi que en vez de decidir con una sola muestra, se toman

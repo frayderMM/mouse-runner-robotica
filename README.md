@@ -62,7 +62,7 @@ Este simulador tiene su contraparte en ROS2 dentro de `robot/granprix_bot/`:
 un paquete `ament_python` que implementa **la misma lógica** (exploración con
 flood fill celda por celda + speed run con BFS) para correr en el Yahboom
 ROSMASTER R2 real, sobre la pista de `pistas/pista_ejemplo.txt` (12×8,
-celdas de 30×30 cm). Construido desde cero en esta carpeta — no depende del
+celdas de 60×60 cm). Construido desde cero en esta carpeta — no depende del
 repo "Reto Final".
 
 Ver `robot/README.md` para el detalle completo: cómo avanza celda por celda,

@@ -6,10 +6,14 @@ la **misma lógica** que `simulador_pista` ya valida offline: intento 1
 BFS sobre el mapa descubierto, tramos comprimidos). Construido desde
 cero en esta carpeta — no depende ni modifica el repo "Reto Final".
 
-Pista objetivo: `pistas/pista_ejemplo.txt` (12×8 celdas de 30×30 cm,
+Pista objetivo: `pistas/pista_ejemplo.txt` (12×8 celdas de 60×60 cm,
 inicio **A1**, meta **L8**, óptimo conocido = 18 movimientos). El
 robot debe reproducir el laberinto **exactamente** como está en ese
 archivo.
+
+> Pista reducida (menos paredes internas) y celdas ampliadas de 30×30
+> a 60×60 cm, mismo layout de 12×8 celdas — `config/pista_ejemplo_referencia.json`
+> ya está regenerado con las paredes actuales.
 
 ---
 
@@ -46,13 +50,13 @@ paquete `ament_python`, sin pasos de compilación de mensajes
 ## 2. Cómo avanza el robot, celda por celda
 
 Igual a como se describió: el robot arranca **orientado al norte**,
-en el **centro de A1**. Cada celda mide **30×30 cm**.
+en el **centro de A1**. Cada celda mide **60×60 cm**.
 
 ### Ronda 1 — Exploración (`explorer_node.py`)
 
 Por cada celda, en este orden:
 
-1. **Llega** al centro de la celda (avance de 30 cm cerrado por
+1. **Llega** al centro de la celda (avance de 60 cm cerrado por
    odometría, ver sección 3).
 2. **Se detiene 1 s** (`tiempo_pausa_antes_girar_s`, reusado como
    pausa de sensado).
@@ -148,9 +152,9 @@ rotación en el sitio. Ambas primitivas cierran el lazo contra
 > `robot_state.py`/`web_dashboard_node.py`.
 
 **Nuevo, específico de este paquete** (no estaba en el proyecto
-anterior porque ahí no se sensaba por celda): `umbral_pared_m: 0.20`
+anterior porque ahí no se sensaba por celda): `umbral_pared_m: 0.35`
 — si una zona mide menos que esto, se marca pared en esa dirección.
-Sale de `celda_cm/2` (15 cm, el punto medio de una celda de 30 cm) +
+Sale de `celda_cm/2` (30 cm, el punto medio de una celda de 60 cm) +
 5 cm de margen. **Verificar en pista real** antes de confiar en él:
 si el LiDAR no está montado cerca del centro del robot, puede hacer
 falta ajustarlo (ver nota equivalente en `CALIBRACION_LIDAR_VISION.md`
@@ -492,7 +496,7 @@ navegación real.
    ya vienen con los valores de `AVANCE_Y_GIRO_CALIBRADO.md`, pero
    confirmar en este robot específico (sección 1 de ese documento)
    antes de correr nada más.
-2. **Avance recto de una celda (30 cm)** — probar `explorer_node`
+2. **Avance recto de una celda (60 cm)** — probar `explorer_node`
    parado en un pasillo recto y medir con cinta métrica si se
    detiene donde corresponde.
 3. **Giro de 90°** — igual, medir con escuadra.

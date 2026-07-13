@@ -11,7 +11,7 @@ seguidas (una sola lectura puede fallar por ruido; una zona solo se
 confirma como pared si aparece en al menos ``sensado_consenso_minimo``
 de esas muestras) -> registrar los muros nuevos -> decidir el
 siguiente movimiento con flood fill -> girar si hace falta -> avanzar
-30cm a la siguiente celda -> repetir.
+60cm a la siguiente celda -> repetir.
 
 Fase A: igual que el simulador, va directo a la meta con la mejor
 opcion greedy de flood fill (distancia BFS a la meta sobre lo
