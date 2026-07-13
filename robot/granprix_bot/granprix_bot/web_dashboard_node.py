@@ -109,7 +109,9 @@ class WebDashboardNode(Node):
             'event_topic': '/robot_event',
             'robot_state_topic': '/robot_state',
             'front_offset_deg': 180.0,
-            'invert_left_right': True,
+            # false: en pista real las zonas izquierda/derecha del LiDAR
+            # resultaron intercambiadas con true (ver granprix_bot_params.yaml).
+            'invert_left_right': False,
             'max_range_use_m': 4.0,
             'factor_dist_odom': 0.9474,
             'factor_ang_odom': 0.9899,

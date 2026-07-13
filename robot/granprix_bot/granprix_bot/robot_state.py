@@ -106,7 +106,9 @@ PARAMETROS_DEFAULT = {
 
     # --- LiDAR (CALIBRACION_LIDAR_VISION.md, seccion 1) ---
     'front_offset_deg': 180.0,
-    'invert_left_right': True,
+    # false: en pista real las zonas izquierda/derecha del LiDAR
+    # resultaron intercambiadas con true (ver granprix_bot_params.yaml).
+    'invert_left_right': False,
     'front_window_deg': [-15.0, 15.0],
     'right_window_deg': [-110.0, -70.0],
     'left_window_deg': [70.0, 110.0],

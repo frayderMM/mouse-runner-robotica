@@ -132,11 +132,20 @@ rotación en el sitio. Ambas primitivas cierran el lazo contra
 | Parámetro | Valor |
 |---|---:|
 | `front_offset_deg` | 180.0 |
-| `invert_left_right` | true |
+| `invert_left_right` | false |
 | `front_window_deg` | [-15, 15] |
 | `right_window_deg` | [-110, -70] |
 | `left_window_deg` | [70, 110] |
 | `back_window_deg` | [165, 195] |
+
+> **Corrección en pista real** (2026-07-13): con `invert_left_right:
+> true` (el valor del doc de calibración) el explorador sensaba pared
+> al **E** en A1 (donde `pistas/pista_ejemplo.txt` está abierto hasta
+> F1) y sin pared al **O** en A8 (donde hay borde de tablero) — las
+> zonas izquierda/derecha del LiDAR estaban intercambiadas para el
+> montaje real de este robot. `front`/`back` sí eran correctos. Se
+> cambió a `false` en `granprix_bot_params.yaml` y en los defaults de
+> `robot_state.py`/`web_dashboard_node.py`.
 
 **Nuevo, específico de este paquete** (no estaba en el proyecto
 anterior porque ahí no se sensaba por celda): `umbral_pared_m: 0.20`
