@@ -1,0 +1,63 @@
+{
+  "pista": "pista_ejemplo.txt",
+  "celda_cm": 30.0,
+  "celda_inicio": "A1",
+  "celda_meta": "L8",
+  "heading_inicial": "NORTE",
+  "pasos": [
+    {
+      "cmd": "AVANZAR",
+      "celdas": 5,
+      "cm": 150.0,
+      "dir": "N",
+      "desde": "A1",
+      "hasta": "A6",
+      "ticks_referencia": 11459
+    },
+    {
+      "cmd": "GIRAR",
+      "grados": -90,
+      "lado": "derecha",
+      "ticks_referencia": 900
+    },
+    {
+      "cmd": "AVANZAR",
+      "celdas": 4,
+      "cm": 120.0,
+      "dir": "E",
+      "desde": "A6",
+      "hasta": "E6",
+      "ticks_referencia": 9167
+    },
+    {
+      "cmd": "GIRAR",
+      "grados": 90,
+      "lado": "izquierda",
+      "ticks_referencia": 900
+    },
+    {
+      "cmd": "AVANZAR",
+      "celdas": 2,
+      "cm": 60.0,
+      "dir": "N",
+      "desde": "E6",
+      "hasta": "E8",
+      "ticks_referencia": 4584
+    },
+    {
+      "cmd": "GIRAR",
+      "grados": -90,
+      "lado": "derecha",
+      "ticks_referencia": 900
+    },
+    {
+      "cmd": "AVANZAR",
+      "celdas": 7,
+      "cm": 210.0,
+      "dir": "E",
+      "desde": "E8",
+      "hasta": "L8",
+      "ticks_referencia": 16043
+    }
+  ]
+}

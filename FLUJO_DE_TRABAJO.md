@@ -16,6 +16,64 @@ en el robot.
 
 ---
 
+## 0. Este repo — simulador de pista (nuevo, independiente del robot)
+
+Esta carpeta (`simulador_pista`) es su **propio repo**, separado del repo
+del reto en el robot (`Reto-Final-ROBOTICA-Yahboom-ROSMASTER-`, que ya no
+se toca — ver `robot/README.md`). Contiene dos cosas:
+
+- El simulador en Python puro (`main.py`, `sim/`) — corre en el PC, sin ROS2.
+- `robot/granprix_bot/` — paquete ROS2 (`ament_python`) que implementa la
+  misma lógica para correr de verdad en el robot. Este **sí** se compila y
+  lanza en el robot (`colcon build`, `ros2 launch`) — ver `robot/README.md`
+  para el detalle completo (calibración, cómo avanza celda por celda,
+  comandos exactos).
+
+```
+https://github.com/frayderMM/mouse-runner-robotica
+```
+
+Ya hecho (primera vez):
+```bash
+git init
+git add -A
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/frayderMM/mouse-runner-robotica.git
+git push -u origin main
+```
+
+Ciclo normal para este repo:
+```bash
+python main.py pistas/pista_ejemplo.txt   # probar localmente
+git add .
+git commit -m "mensaje del cambio"
+git push origin main
+```
+> `__pycache__/` y `*.pyc` están en `.gitignore`, no se suben. Las imágenes
+> generadas en `pistas/` (`.png`) sí se suben porque son parte de los
+> resultados/ejemplos del simulador.
+
+### Compilar y correr `robot/granprix_bot` en el robot
+
+```bash
+# En el robot, dentro del contenedor Docker (ver Paso 3 de la sección 2):
+cd /root/yahboomcar_ws/src
+git clone https://github.com/frayderMM/mouse-runner-robotica.git simulador-pista   # primera vez
+# o, si ya está clonado:
+cd simulador-pista && git fetch origin && git reset --hard origin/main && cd ..
+
+ln -sf /root/yahboomcar_ws/src/simulador-pista/robot/granprix_bot /root/yahboomcar_ws/src/granprix_bot
+cd /root/yahboomcar_ws
+colcon build --packages-select granprix_bot
+source install/setup.bash
+
+ros2 launch granprix_bot explorar.launch.py    # Ronda 1
+ros2 launch granprix_bot speedrun.launch.py    # Ronda 2 (despues de la 1)
+```
+
+---
+
 ## 1. Primera vez — crear el repo (ya hecho)
 
 **En el PC**, dentro de la carpeta `Reto Final` (ya ejecutado):
@@ -110,6 +168,7 @@ PC, commit, push, y repetir el pull en el robot.
   local si no hace falta que el robot los vea.
 - Después de cada commit, hacer `git push` directo sin pedir confirmación
   — así se trabajó en RC3.
+
 ```
 ros2 launch capytown_granprix granprix_bringup.launch.py usar_camara:=false
 ```

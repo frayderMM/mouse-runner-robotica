@@ -54,6 +54,21 @@ hacia arriba (A1 = esquina inferior izquierda).
 | `--track-cm` | Distancia entre ruedas | 15 |
 | `--ticks` | Ticks de encoder por vuelta de rueda | 1560 |
 | `--exportar mapa.yaml` | Guarda el mapa descubierto en formato 4 bits por celda (N/E/S/O) — el mismo que usarías en el robot real | — |
+| `--exportar-plan plan.json` | Exporta el plan de ejecución (intento 2) en JSON, solo como referencia/comparación offline | — |
+
+## Ejecución en el robot real — `robot/granprix_bot`
+
+Este simulador tiene su contraparte en ROS2 dentro de `robot/granprix_bot/`:
+un paquete `ament_python` que implementa **la misma lógica** (exploración con
+flood fill celda por celda + speed run con BFS) para correr en el Yahboom
+ROSMASTER R2 real, sobre la pista de `pistas/pista_ejemplo.txt` (12×8,
+celdas de 30×30 cm). Construido desde cero en esta carpeta — no depende del
+repo "Reto Final".
+
+Ver `robot/README.md` para el detalle completo: cómo avanza celda por celda,
+calibración usada (tomada de `AVANCE_Y_GIRO_CALIBRADO.md` y
+`CALIBRACION_LIDAR_VISION.md`, en la raíz de este repo), y cómo compilar y
+lanzar en el robot.
 
 ## Qué muestra la salida
 

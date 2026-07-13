@@ -34,6 +34,9 @@ def main():
     ap.add_argument("--ticks", type=int, default=1560, help="ticks encoder por vuelta")
     ap.add_argument("--exportar", metavar="ARCHIVO.yaml",
                     help="exporta el mapa descubierto en formato 4-bits (NESO)")
+    ap.add_argument("--exportar-plan", metavar="ARCHIVO.json",
+                    help="exporta el plan de ejecucion (intento 2) en JSON, referencia/comparacion "
+                         "contra robot/granprix_bot (que calcula su propio plan en el robot real)")
     ap.add_argument("--sin-grafico", action="store_true",
                     help="no generar/mostrar la imagen de la pista (matplotlib)")
     args = ap.parse_args()
@@ -129,6 +132,10 @@ def main():
         exportar_yaml(mz, r1["conocidos"], args.exportar)
         print(f"\nMapa descubierto exportado a {args.exportar}")
 
+    if args.exportar_plan:
+        exportar_plan_json(mz, cfg, plan, args.pista, args.exportar_plan)
+        print(f"Plan de ejecucion exportado a {args.exportar_plan}")
+
     if not args.sin_grafico:
         try:
             from generar_pista import generar_tres_vistas
@@ -157,6 +164,40 @@ def exportar_yaml(mz, conocidos, ruta_archivo):
         lineas.append(f"  - [{', '.join(fila)}]   # fila {y+1}")
     with open(ruta_archivo, "w", encoding="utf-8") as f:
         f.write("\n".join(lineas) + "\n")
+
+
+def exportar_plan_json(mz, cfg, plan, ruta_pista, ruta_archivo):
+    """Exporta el plan de ejecucion (intento 2) a JSON -- solo como
+    referencia/comparacion offline (por ejemplo contra lo que calcula
+    robot/granprix_bot/speedrun_node.py en el robot real a partir de su
+    propio mapa descubierto). Los "ticks" son informativos, no se usan
+    para controlar el robot real (ver robot/README.md)."""
+    import json
+    import os
+
+    pasos = []
+    for p in plan:
+        if p["cmd"] == "GIRAR":
+            pasos.append({"cmd": "GIRAR", "grados": p["grados"], "lado": p["lado"],
+                          "ticks_referencia": p["ticks"]})
+        else:
+            pasos.append({
+                "cmd": "AVANZAR", "celdas": p["celdas"], "cm": p["cm"], "dir": p["dir"],
+                "desde": p["desde"], "hasta": p["hasta"],
+                "ticks_referencia": p["ticks"],
+            })
+
+    data = {
+        "pista": os.path.basename(ruta_pista),
+        "celda_cm": cfg.celda_cm,
+        "celda_inicio": nombre(mz.start),
+        "celda_meta": nombre(mz.goal),
+        "heading_inicial": "NORTE",
+        "pasos": pasos,
+    }
+    with open(ruta_archivo, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
 
 
 if __name__ == "__main__":

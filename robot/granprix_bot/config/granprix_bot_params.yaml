@@ -1,0 +1,118 @@
+# Parametros de granprix_bot -- pista del examen (pistas/pista_ejemplo.txt,
+# 12x8 celdas de 30x30 cm, inicio A1, meta L8).
+#
+# Calibracion tomada de AVANCE_Y_GIRO_CALIBRADO.md (avance/giro por
+# odometria) y CALIBRACION_LIDAR_VISION.md (zonas de LiDAR), ambos en
+# la raiz de simulador_pista. Editar SIEMPRE en el PC, nunca en el
+# robot (ver FLUJO_DE_TRABAJO.md).
+#
+# explorer y speedrun comparten casi todos los parametros (ver
+# granprix_bot/robot_state.py::PARAMETROS_DEFAULT) -- se repiten aca
+# por nodo porque asi es como ROS2 carga params por namespace, pero
+# deben mantenerse iguales entre ambos salvo que se recalibren.
+
+explorer:
+  ros__parameters:
+    scan_topic: /scan
+    odom_topic: /odom_raw
+    cmd_vel_topic: /cmd_vel
+    control_rate_hz: 20.0
+
+    # --- Pista (pistas/pista_ejemplo.txt) ---
+    celda_cm: 30.0
+    num_columnas: 12
+    num_filas: 8
+    celda_inicio: A1
+    celda_meta: L8
+    heading_inicial: N
+    orden_desempate: [N, E, S, O]
+    max_celdas_recorridas: 200
+
+    # --- LiDAR (CALIBRACION_LIDAR_VISION.md, seccion 1) ---
+    front_offset_deg: 180.0
+    invert_left_right: true
+    front_window_deg: [-15.0, 15.0]
+    right_window_deg: [-110.0, -70.0]
+    left_window_deg: [70.0, 110.0]
+    back_window_deg: [165.0, 195.0]
+    max_range_use_m: 4.0
+    # Umbral de "hay pared" al sensar una celda: celda_cm/2 (15cm) +
+    # margen de seguridad (5cm) = 20cm. Si el LiDAR mide menos que
+    # esto en una zona, se marca pared en esa direccion.
+    umbral_pared_m: 0.20
+
+    # --- Avance y giro calibrados (AVANCE_Y_GIRO_CALIBRADO.md) ---
+    factor_dist_odom: 0.9474
+    factor_ang_odom: 0.9899
+    velocidad_recta_mps: 0.15
+    margen_avance_m: 0.03
+    # Correccion continua durante el avance recto (motion.py::_correccion_recta):
+    # corrige error angular + deriva lateral respecto a la linea recta
+    # inicial. 'ninguna' vuelve al avance ciego original.
+    tipo_correccion: angular_simple
+    kp_angulo_recto: 2.2
+    kp_lateral_recto: 1.1
+    angular_max_correccion_radps: 0.3
+    velocidad_giro_lineal_mps: 0.06
+    velocidad_giro_angular_radps: 0.6
+    angulo_giro_deg: 90.0
+    angulo_maximo_giro_deg: 150.0
+    tolerancia_giro_deg: 4.0
+    # Reusado tambien como pausa de 1s al llegar a cada celda (sensado).
+    tiempo_pausa_antes_girar_s: 1.0
+
+    # --- Seguridad ---
+    umbral_colision_m: 0.10
+    tiempo_espera_obstaculo_s: 2.0
+
+    # --- Salida: mapa descubierto, lo consume speedrun despues ---
+    mapa_salida: "~/capytown_resultados/mapa_descubierto.yaml"
+
+speedrun:
+  ros__parameters:
+    scan_topic: /scan
+    odom_topic: /odom_raw
+    cmd_vel_topic: /cmd_vel
+    control_rate_hz: 20.0
+
+    celda_cm: 30.0
+    num_columnas: 12
+    num_filas: 8
+    celda_inicio: A1
+    celda_meta: L8
+    heading_inicial: N
+    orden_desempate: [N, E, S, O]
+    max_celdas_recorridas: 200
+
+    front_offset_deg: 180.0
+    invert_left_right: true
+    front_window_deg: [-15.0, 15.0]
+    right_window_deg: [-110.0, -70.0]
+    left_window_deg: [70.0, 110.0]
+    back_window_deg: [165.0, 195.0]
+    max_range_use_m: 4.0
+    umbral_pared_m: 0.20
+
+    factor_dist_odom: 0.9474
+    factor_ang_odom: 0.9899
+    # Velocidad recta del tramo comprimido -- puede subirse una vez
+    # validado en pista (a diferencia de explorer, aca no hay pausas
+    # intermedias que absorban un error de deriva).
+    velocidad_recta_mps: 0.15
+    margen_avance_m: 0.03
+    tipo_correccion: angular_simple
+    kp_angulo_recto: 2.2
+    kp_lateral_recto: 1.1
+    angular_max_correccion_radps: 0.3
+    velocidad_giro_lineal_mps: 0.06
+    velocidad_giro_angular_radps: 0.6
+    angulo_giro_deg: 90.0
+    angulo_maximo_giro_deg: 150.0
+    tolerancia_giro_deg: 4.0
+    tiempo_pausa_antes_girar_s: 1.0
+
+    umbral_colision_m: 0.10
+    tiempo_espera_obstaculo_s: 2.0
+
+    # --- Entrada: mapa que dejo explorer ---
+    mapa_entrada: "~/capytown_resultados/mapa_descubierto.yaml"
