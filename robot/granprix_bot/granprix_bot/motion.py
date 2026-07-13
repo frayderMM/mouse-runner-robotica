@@ -231,10 +231,22 @@ class NodoRobotBase(Node):
 
     def _tick_avance(self, distancia_m: float = None) -> bool:
         """Publica el comando de avance y devuelve True cuando ya
-        recorrio ``distancia_m`` (default: una celda, ``celda_cm``).
-        Usado tal cual por ``explorer_node`` (siempre una celda) y por
-        ``speedrun_node`` (distancia_m = tramo completo comprimido de
-        varias celdas, para recorrerlo de un tiron)."""
+        recorrio ``distancia_m`` (default: una celda, ``celda_cm``) O
+        cuando el LiDAR frontal ya ve una pared real a
+        ``distancia_frenado_pared_frontal_m`` o menos -- lo que pase
+        primero. Usado tal cual por ``explorer_node`` (siempre una
+        celda) y por ``speedrun_node`` (distancia_m = tramo completo
+        comprimido de varias celdas, para recorrerlo de un tiron).
+
+        La odometria sola no alcanza: friccion/deslizamiento de
+        ruedas hace que a veces el avance real quede corto o largo
+        respecto a lo que reporta el odometro. La pared frontal
+        detectada por LiDAR es una referencia fisica mas confiable que
+        la odometria acumulada -- si ya esta ahi, se toma el avance
+        como terminado (se frena y se cuenta la celda como recorrida)
+        sin importar cuanto marcaba el odometro en ese momento, en vez
+        de seguir empujando contra la pared o quedarse corto por
+        exceso de confianza en el odometro."""
         if distancia_m is None:
             distancia_m = self.p.celda_cm / 100.0
 
@@ -243,7 +255,10 @@ class NodoRobotBase(Node):
         avance = math.hypot(dx, dy)
         objetivo = distancia_m - self.p.margen_avance_m
 
-        if avance >= objetivo:
+        frente_m = self.leer_zonas()['front']
+        pared_frontal_cerca = frente_m <= self.p.distancia_frenado_pared_frontal_m
+
+        if avance >= objetivo or pared_frontal_cerca:
             self._publish_twist(Twist())
             return True
 

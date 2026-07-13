@@ -135,6 +135,16 @@ PARAMETROS_DEFAULT = {
     'factor_ang_odom': 0.9899,
     'velocidad_recta_mps': 0.15,
     'margen_avance_m': 0.03,
+    # Retroalimentacion por pared frontal (ver motion.py::_tick_avance):
+    # la odometria sola acarrea error por friccion/deslizamiento (a
+    # veces avanza de mas, a veces de menos que lo comandado). Si el
+    # LiDAR frontal ya ve una pared real a esta distancia o menos, se
+    # da el avance por terminado ahi mismo -- sin importar cuanto
+    # marca el odometro -- porque la pared es una referencia fisica
+    # mas confiable que la distancia acumulada. Debe ser MAYOR que
+    # umbral_colision_m (si no, el aviso de obstaculo inesperado
+    # saltaria primero y confundiria una llegada normal con un choque).
+    'distancia_frenado_pared_frontal_m': 0.15,
     # Correccion durante el avance recto (ver motion.py::_correccion_recta):
     # 'ninguna' = avance ciego (sin correccion, comportamiento original);
     # 'angular_simple' = corrige error angular + deriva lateral respecto
@@ -232,6 +242,7 @@ class Parametros:
         self.factor_ang_odom = float(g('factor_ang_odom'))
         self.velocidad_recta_mps = float(g('velocidad_recta_mps'))
         self.margen_avance_m = float(g('margen_avance_m'))
+        self.distancia_frenado_pared_frontal_m = float(g('distancia_frenado_pared_frontal_m'))
         self.tipo_correccion = str(g('tipo_correccion'))
         self.kp_angulo_recto = float(g('kp_angulo_recto'))
         self.kp_lateral_recto = float(g('kp_lateral_recto'))

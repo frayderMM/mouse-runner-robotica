@@ -82,6 +82,14 @@ explorer:
     factor_ang_odom: 0.9899
     velocidad_recta_mps: 0.15
     margen_avance_m: 0.03
+    # Retroalimentacion por pared frontal (motion.py::_tick_avance): si
+    # el LiDAR frontal ya ve una pared real a esta distancia o menos,
+    # se da el avance por terminado ahi mismo -- corrige el error de
+    # friccion/deslizamiento de la odometria (a veces avanza de mas, a
+    # veces de menos que lo comandado) usando la pared como referencia
+    # fisica. Debe ser MAYOR que umbral_colision_m (ver seccion de
+    # seguridad mas abajo).
+    distancia_frenado_pared_frontal_m: 0.15
     # Correccion continua durante el avance recto (motion.py::_correccion_recta):
     # corrige error angular + deriva lateral respecto a la linea recta
     # inicial. 'ninguna' vuelve al avance ciego original.
@@ -174,6 +182,14 @@ speedrun:
     # intermedias que absorban un error de deriva).
     velocidad_recta_mps: 0.15
     margen_avance_m: 0.03
+    # Retroalimentacion por pared frontal (motion.py::_tick_avance): si
+    # el LiDAR frontal ya ve una pared real a esta distancia o menos,
+    # se da el avance por terminado ahi mismo -- corrige el error de
+    # friccion/deslizamiento de la odometria (a veces avanza de mas, a
+    # veces de menos que lo comandado) usando la pared como referencia
+    # fisica. Debe ser MAYOR que umbral_colision_m (ver seccion de
+    # seguridad mas abajo).
+    distancia_frenado_pared_frontal_m: 0.15
     tipo_correccion: angular_simple
     kp_angulo_recto: 2.2
     kp_lateral_recto: 1.1
