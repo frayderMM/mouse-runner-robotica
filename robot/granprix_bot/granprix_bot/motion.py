@@ -27,8 +27,14 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, UInt16
 
 from . import lidar
-from .geometry_utils import angle_diff, yaw_from_quaternion
-from .robot_state import GridPose, Parametros, declarar_parametros
+from .geometry_utils import angle_diff, normalize_angle, yaw_from_quaternion
+from .robot_state import GIRO_180, GIRO_DERECHA, GIRO_IZQUIERDA, GridPose, Parametros, declarar_parametros
+
+# Offset fijo (grados) del yaw absoluto de cada heading logico respecto
+# al yaw de referencia de la mision (heading N = 0, el resto siguen el
+# sentido de giro ya establecido: DERECHA resta 90 -- N->E->S->O->N).
+_OFFSET_HEADING_DEG = {'N': 0.0, 'E': -90.0, 'S': 180.0, 'O': 90.0}
+_DESTINO_GIRO = {'DERECHA': GIRO_DERECHA, 'IZQUIERDA': GIRO_IZQUIERDA, 'ATRAS': GIRO_180}
 
 
 class NodoRobotBase(Node):
@@ -46,9 +52,19 @@ class NodoRobotBase(Node):
         self._odom_ready = False
         self._scan = None
         self._scan_ready = False
+        # Yaw "cero" de la mision: se fija UNA sola vez, con la primera
+        # lectura de /odom_raw (ver _on_odom) -- todos los objetivos de
+        # AVANZAR y GIRAR se miden desde aca (mas los 90/180/270 grados
+        # fijos de _OFFSET_HEADING_DEG segun el heading logico), no
+        # desde el yaw que el robot tenia justo antes de CADA accion.
+        # Asi un error de un tramo/giro no se convierte en el "cero"
+        # del siguiente, evitando que se acumule sin limite. Si el
+        # robot arranca la mision desalineado (no apuntando derecho al
+        # pasillo), ese error queda fijo toda la corrida -- ver
+        # README.md seccion de calibracion.
+        self._yaw_referencia_mision = None
 
         self._avance_inicio_xy = (0.0, 0.0)
-        self._yaw_inicio_avance = 0.0
         self._yaw_inicio_giro = 0.0
         self._pausa_inicio = None
         self._muros_conteo = {}
@@ -82,6 +98,23 @@ class NodoRobotBase(Node):
         self._odom_y = msg.pose.pose.position.y * self.p.factor_dist_odom
         self._yaw = yaw_from_quaternion(msg.pose.pose.orientation) * self.p.factor_ang_odom
         self._odom_ready = True
+        if self._yaw_referencia_mision is None:
+            # Primera lectura de odometria: define "heading N" para
+            # toda la mision. Si el robot no esta bien alineado con el
+            # pasillo en este instante, ese desalineamiento queda fijo
+            # el resto de la corrida -- alinearlo a mano ANTES de
+            # lanzar el nodo (ver README.md).
+            self._yaw_referencia_mision = self._yaw
+
+    def _yaw_objetivo(self, heading: str) -> float:
+        """Yaw absoluto (radianes) que le corresponde al heading logico
+        dado (N/E/S/O), fijo desde el arranque de la mision -- ver
+        `_yaw_referencia_mision`."""
+        if self._yaw_referencia_mision is None:
+            return self._yaw  # todavia no llego ninguna lectura de odometria
+        return normalize_angle(
+            self._yaw_referencia_mision + math.radians(_OFFSET_HEADING_DEG[heading])
+        )
 
     def _on_scan(self, msg: LaserScan):
         self._scan = msg
@@ -195,7 +228,6 @@ class NodoRobotBase(Node):
     # ------------------------------------------------------------------
     def _iniciar_avance(self):
         self._avance_inicio_xy = (self._odom_x, self._odom_y)
-        self._yaw_inicio_avance = self._yaw
 
     def _tick_avance(self, distancia_m: float = None) -> bool:
         """Publica el comando de avance y devuelve True cuando ya
@@ -224,14 +256,26 @@ class NodoRobotBase(Node):
     def _correccion_recta(self, dx: float, dy: float) -> float:
         """tipo_correccion='angular_simple': corrige continuamente
         durante el avance, sumando error angular + error lateral
-        respecto a la linea recta inicial (posicion y yaw guardados en
-        ``_iniciar_avance``) -- a diferencia del avance ciego original
-        (tipo_correccion='ninguna', sin correccion).
+        respecto a la linea recta ideal para el heading logico actual
+        -- a diferencia del avance ciego original (tipo_correccion=
+        'ninguna', sin correccion).
+
+        yaw0 es el yaw ABSOLUTO objetivo (`_yaw_objetivo`), NO el yaw
+        que el robot tenia al arrancar ESTE tramo -- eso permitia que
+        un heading ya torcido (por ejemplo, si el robot arranca la
+        mision no bien alineado) se sostuviera para siempre en vez de
+        corregirse, y que el error de un tramo se le sumara al
+        siguiente. Con el objetivo absoluto fijo, el error no se
+        acumula tramo a tramo ni giro a giro (aunque si el robot
+        arranca la mision desalineado, ese error inicial sigue
+        presente en TODA la corrida -- esto no lo corrige, hace falta
+        alinearlo bien a mano antes de lanzar, o agregar correccion
+        contra la pared real por LiDAR si no alcanza).
 
         error_angular: convencion "objetivo - actual" (angle_diff(yaw0,
         yaw_actual)), no "actual - objetivo" -- con kp_angulo POSITIVO,
         esta es la convencion que cierra el lazo (si el yaw actual se
-        fue a la derecha del inicial, error_angular>0 empuja angular.z
+        fue a la derecha del objetivo, error_angular>0 empuja angular.z
         positivo = gira a la izquierda, de vuelta hacia yaw0). Con el
         signo invertido (actual-objetivo) el lazo seria de
         realimentacion POSITIVA y divergiria -- mismo tipo de error
@@ -240,7 +284,7 @@ class NodoRobotBase(Node):
 
         error_lateral: cuanto se alejo, perpendicular a esa linea, de
         la trayectoria recta ideal (proyeccion de (dx,dy) sobre el eje
-        perpendicular al yaw inicial, hacia la izquierda). Con
+        perpendicular al yaw objetivo, hacia la izquierda). Con
         kp_lateral RESTANDO: si se fue hacia la izquierda
         (error_lateral>0), angular.z se vuelve negativo (gira a la
         derecha) para volver al centro.
@@ -254,7 +298,7 @@ class NodoRobotBase(Node):
         if self.p.tipo_correccion != 'angular_simple':
             return 0.0
 
-        yaw0 = self._yaw_inicio_avance
+        yaw0 = self._yaw_objetivo(self.pose.heading)
         error_angular = angle_diff(yaw0, self._yaw)
         error_lateral = dx * (-math.sin(yaw0)) + dy * math.cos(yaw0)
 
@@ -271,38 +315,44 @@ class NodoRobotBase(Node):
 
     def _tick_giro(self, lado: str) -> bool:
         """lado in {'DERECHA', 'IZQUIERDA', 'ATRAS'}. Devuelve True
-        cuando el giro objetivo (90 o 180) ya se completo.
+        cuando el giro ya alcanzo su objetivo.
 
-        El objetivo NO se resta con ninguna tolerancia -- antes se
-        restaba `tolerancia_giro_deg` (pensada para una variante de
-        giro distinta, con lazo cerrado por error angular, no
-        implementada aca) y eso hacia que TODO giro quedara
-        sistematicamente ~4 grados corto. Ahora se espera a que
-        `angulo_girado` alcance el objetivo completo (con hasta ~1-2
-        grados de overshoot por el tick discreto de 20Hz, mucho mejor
-        que quedar corto).
+        El objetivo es un yaw ABSOLUTO (`_yaw_objetivo` del heading de
+        destino, calculado a partir de `self.pose.heading` -- pose
+        TODAVIA no se actualiza hasta que este metodo devuelve True),
+        no un delta relativo al yaw que tenia el robot al empezar ESTE
+        giro. Antes, si un giro quedaba unos grados de mas o de menos,
+        ese error se convertia en el "cero" del siguiente tramo recto
+        y del siguiente giro, acumulandose sin limite vuelta tras
+        vuelta -- con el objetivo absoluto fijo, el error de un giro
+        no contamina a los que siguen.
 
-        El tope de seguridad (`margen_seguridad_giro_rad`) es un
-        MARGEN sobre el objetivo de ESTE giro, no un angulo absoluto
-        fijo -- antes era un angulo absoluto (150) menor que el
-        objetivo real de un giro ATRAS (180), asi que todo giro de 180
-        se cortaba en ~150 grados reales aunque GridPose.girar ya
-        hubiera aplicado el giro logico completo de 180."""
-        if lado == 'ATRAS':
-            # objetivo ligeramente menor a pi: angle_diff() devuelve en
-            # (-pi, pi], asi que apuntar a exactamente pi cae en el
-            # punto de wraparound (riesgo de nunca cruzar la
-            # comparacion por precision de punto flotante justo ahi).
-            objetivo_rad = math.pi - self.p.margen_singularidad_atras_rad
-            izquierda = True  # convencion fija: ATRAS siempre gira por la izquierda
-        else:
-            objetivo_rad = self.p.angulo_giro_rad
-            izquierda = (lado == 'IZQUIERDA')
+        `ya_giro_lo_suficiente` exige que el robot haya rotado
+        realmente casi todo el angulo nominal (90/180) antes de
+        aceptar "ya estoy cerca del objetivo absoluto" -- sin esto, si
+        ya habia error acumulado previo que por casualidad dejaba el
+        yaw actual cerca del objetivo de destino, el giro podria
+        cortarse casi sin haber girado, dejando al robot fuera de
+        posicion (el giro tambien tiene que desplazarlo por el arco,
+        no solo rotarlo).
+
+        El tope de seguridad (`margen_seguridad_giro_rad`) sigue
+        siendo relativo a cuanto se giro REALMENTE (no al objetivo
+        absoluto) -- por si el odometro se traba y el yaw absoluto
+        nunca converge."""
+        heading_destino = _DESTINO_GIRO[lado][self.pose.heading]
+        objetivo_abs = self._yaw_objetivo(heading_destino)
+        objetivo_relativo_nominal = math.pi if lado == 'ATRAS' else self.p.angulo_giro_rad
+        izquierda = True if lado == 'ATRAS' else (lado == 'IZQUIERDA')
 
         angulo_girado = abs(angle_diff(self._yaw, self._yaw_inicio_giro))
-        tope_seguridad_rad = objetivo_rad + self.p.margen_seguridad_giro_rad
+        error_al_objetivo = abs(angle_diff(objetivo_abs, self._yaw))
+        tope_seguridad_rad = objetivo_relativo_nominal + self.p.margen_seguridad_giro_rad
 
-        if angulo_girado >= objetivo_rad or angulo_girado >= tope_seguridad_rad:
+        cerca_del_objetivo = error_al_objetivo <= self.p.tolerancia_giro_absoluto_rad
+        ya_giro_lo_suficiente = angulo_girado >= objetivo_relativo_nominal - self.p.margen_giro_minimo_rad
+
+        if (cerca_del_objetivo and ya_giro_lo_suficiente) or angulo_girado >= tope_seguridad_rad:
             self._publish_twist(Twist())
             return True
 

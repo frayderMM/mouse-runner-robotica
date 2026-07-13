@@ -87,10 +87,18 @@ explorer:
     # un giro ATRAS (180), asi que todo giro de 180 se cortaba en
     # ~150 grados reales -- ver motion.py::_tick_giro.
     margen_seguridad_giro_deg: 60.0
-    # Solo para el giro ATRAS (180): apunta a un poco menos de 180
-    # para evitar la singularidad de angle_diff() justo en el
-    # wraparound (-180/180). NO se usa para acortar giros de 90.
-    margen_singularidad_atras_deg: 4.0
+    # El giro ahora corta contra un yaw ABSOLUTO fijo desde el inicio
+    # de la mision (motion.py::_yaw_objetivo), no contra un delta
+    # relativo al yaw de arranque de ESE giro -- asi el error de un
+    # giro no se acumula en el siguiente. tolerancia_giro_absoluto_deg
+    # es que tan cerca del objetivo absoluto hay que estar para dar el
+    # giro por terminado.
+    tolerancia_giro_absoluto_deg: 3.0
+    # Piso de seguridad: cuanto tiene que haber girado REALMENTE antes
+    # de aceptar "ya estoy cerca del objetivo absoluto" -- sin esto, si
+    # ya habia error acumulado que por casualidad dejaba el yaw cerca
+    # del destino, el giro podria cortarse casi sin haber girado.
+    margen_giro_minimo_deg: 4.0
     # Reusado tambien como pausa de 1s al llegar a cada celda (sensado).
     tiempo_pausa_antes_girar_s: 1.0
 
@@ -157,7 +165,8 @@ speedrun:
     velocidad_giro_angular_radps: 0.6
     angulo_giro_deg: 90.0
     margen_seguridad_giro_deg: 60.0
-    margen_singularidad_atras_deg: 4.0
+    tolerancia_giro_absoluto_deg: 3.0
+    margen_giro_minimo_deg: 4.0
     tiempo_pausa_antes_girar_s: 1.0
 
     umbral_colision_m: 0.10

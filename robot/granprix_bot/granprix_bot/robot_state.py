@@ -149,14 +149,19 @@ PARAMETROS_DEFAULT = {
     # aunque el modelo logico (GridPose) ya hubiera aplicado el giro
     # completo. Ver motion.py::_tick_giro.
     'margen_seguridad_giro_deg': 60.0,
-    # Pequeno margen numerico (no de "aceptar giro corto"): un giro
-    # ATRAS objetivo exactamente 180 esta justo en el punto donde
-    # angle_diff() da la vuelta (rango (-180, 180]), asi que se apunta
-    # a un poco menos para evitar quedar oscilando justo en ese punto
-    # por precision de punto flotante. NO se usa para restar del
-    # objetivo de los giros de 90 (eso era el bug: todo giro quedaba
-    # sistematicamente ~4 grados corto).
-    'margen_singularidad_atras_deg': 4.0,
+    # Objetivo del giro: cuanto se acerca el yaw actual al yaw ABSOLUTO
+    # de destino (`motion.py::_yaw_objetivo`) para dar el giro por
+    # terminado -- no es "restar del objetivo" (ese era el bug viejo,
+    # todo giro quedaba sistematicamente corto), es solo la tolerancia
+    # de "suficientemente cerca" antes de frenar.
+    'tolerancia_giro_absoluto_deg': 3.0,
+    # Cuanto tiene que haber girado REALMENTE (angulo recorrido, no
+    # distancia al objetivo absoluto) antes de aceptar que el giro
+    # termino -- sin este piso, si ya habia error acumulado que por
+    # casualidad dejaba el yaw cerca del objetivo de destino, el giro
+    # podria cortarse casi sin haber girado (el robot tiene que
+    # desplazarse por el arco tambien, no solo rotar).
+    'margen_giro_minimo_deg': 4.0,
     'tiempo_pausa_antes_girar_s': 1.0,
 
     # --- Seguridad (identica a state_machine_node del proyecto original) ---
@@ -230,7 +235,8 @@ class Parametros:
         self.velocidad_giro_angular_radps = float(g('velocidad_giro_angular_radps'))
         self.angulo_giro_rad = math.radians(float(g('angulo_giro_deg')))
         self.margen_seguridad_giro_rad = math.radians(float(g('margen_seguridad_giro_deg')))
-        self.margen_singularidad_atras_rad = math.radians(float(g('margen_singularidad_atras_deg')))
+        self.tolerancia_giro_absoluto_rad = math.radians(float(g('tolerancia_giro_absoluto_deg')))
+        self.margen_giro_minimo_rad = math.radians(float(g('margen_giro_minimo_deg')))
         self.tiempo_pausa_antes_girar_s = float(g('tiempo_pausa_antes_girar_s'))
 
         self.umbral_colision_m = float(g('umbral_colision_m'))

@@ -216,6 +216,52 @@ falta verificar en el robot real** (sección 5, orden de calibración):
 - Si diverge (el error crece en vez de achicarse): **antes que nada**,
   sospechar del signo — revisar `_correccion_recta` en `motion.py`.
 
+### Referencia de yaw absoluta (2026-07) — evita que el error se acumule entre tramos y giros
+
+**Problema real observado en pista:** si el robot arranca la misión
+posicionado un poco torcido, seguía derecho pero en esa misma
+diagonal — la corrección de línea recta lo sostenía en el heading que
+tenía *al arrancar ese tramo puntual*, no lo corregía hacia un
+"derecho" real. Como consecuencia, se iba acercando cada vez más a una
+pared (una diagonal constante se aleja linealmente con la distancia
+recorrida).
+
+**Causa:** tanto `_correccion_recta` (tramos rectos) como `_tick_giro`
+(giros) medían su objetivo como un **delta relativo al yaw que el
+robot tenía justo antes de esa acción puntual** — así que el error de
+un giro se convertía en el "cero" del siguiente tramo, y ese error se
+sumaba al del próximo giro, sin límite (confirmado con una simulación:
+12 giros seguidos con un 3% de sesgo acumulaban 3.5° de error total,
+creciendo linealmente con la cantidad de giros).
+
+**Fix — `motion.py::_yaw_objetivo`:** ahora existe un **yaw de
+referencia fijado una sola vez**, con la primera lectura de
+`/odom_raw` al arrancar el nodo (`_yaw_referencia_mision`). Tanto el
+tramo recto como el giro apuntan siempre a un yaw **absoluto**
+calculado desde esa referencia fija (`_yaw_referencia_mision +
+offset_del_heading`, offset fijo de 0°/-90°/180°/90° para N/E/S/O) —
+no al yaw que el robot tenía justo antes de esa acción. Verificado con
+simulación numérica: con el mismo 3% de sesgo, el error queda acotado
+(~3° máximo) sin importar cuántos giros se hagan, en vez de crecer sin
+límite.
+
+**Lo que esto NO arregla:** si el robot arranca la misión **realmente**
+desalineado del pasillo (no apuntando derecho de verdad), ese error
+queda fijo toda la corrida — porque `_yaw_referencia_mision` se define
+como "lo que sea que el robot tenía apuntado en ese instante", no hay
+forma de saber desde la odometría sola si eso era realmente derecho.
+**Alinear bien el robot a mano antes de lanzar el nodo** (`explorer`/
+`speedrun`) sigue siendo necesario. Si esto no alcanza en pista real,
+el siguiente paso es corrección real contra la pared por LiDAR
+(`right_window_deg`/`left_window_deg`, ya calibrados en
+`CALIBRACION_LIDAR_VISION.md` para el proyecto original) — no
+implementado todavía acá.
+
+| Parámetro | Valor | Uso |
+|---|---:|---|
+| `tolerancia_giro_absoluto_deg` | 3.0 | Que tan cerca del yaw absoluto de destino hay que estar para dar el giro por terminado |
+| `margen_giro_minimo_deg` | 4.0 | Piso: cuanto tiene que haber girado REALMENTE antes de aceptar "ya estoy cerca" (evita cortar el giro casi sin haber girado si el yaw ya estaba cerca del destino por error acumulado previo) |
+
 ### Seguridad (igual en ambos nodos, cualquier estado)
 
 | Parámetro | Valor |
