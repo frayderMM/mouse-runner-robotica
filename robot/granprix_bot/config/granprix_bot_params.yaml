@@ -37,7 +37,7 @@ explorer:
     # compensar. La pista fisica (pistas/pista_ejemplo.txt) sigue
     # siendo de celdas de 30cm -- este valor es SOLO la distancia que
     # se le pide recorrer a cada AVANZAR, no una medida de la pista.
-    celda_cm: 29.0
+    celda_cm: 30.0
     num_columnas: 12
     num_filas: 8
     celda_inicio: A1
@@ -149,7 +149,7 @@ speedrun:
     # compensar. La pista fisica (pistas/pista_ejemplo.txt) sigue
     # siendo de celdas de 30cm -- este valor es SOLO la distancia que
     # se le pide recorrer a cada AVANZAR, no una medida de la pista.
-    celda_cm: 29.0
+    celda_cm: 30.0
     num_columnas: 12
     num_filas: 8
     celda_inicio: A1
